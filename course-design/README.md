@@ -1,5 +1,12 @@
 # YOLO 课程设计 — 实时目标检测与行为分析系统
 
+[![CI](https://github.com/m-oonn/YOLO/actions/workflows/ci.yml/badge.svg)](https://github.com/m-oonn/YOLO/actions)
+[![codecov](https://codecov.io/gh/m-oonn/YOLO/branch/main/graph/badge.svg)](https://codecov.io/gh/m-oonn/YOLO)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3.4+-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+
 基于 **YOLOv11/v12** 的实时目标检测与行为分析系统，包含完整的 **FastAPI** 后端和 **Vue.js 3** 前端。
 
 ## 项目概述
