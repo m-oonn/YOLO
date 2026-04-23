@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 from fastapi import APIRouter, HTTPException, Query
@@ -12,6 +13,7 @@ from fastapi.responses import FileResponse
 
 from backend.store import get_store
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -23,16 +25,33 @@ def list_events(
     start_time: float | None = Query(None, description="Start timestamp"),
     end_time: float | None = Query(None, description="End timestamp"),
 ):
-    """Query events with optional filters."""
-    store = get_store()
-    events, total = store.query_with_total(
-        event_type=event_type,
-        limit=limit,
-        offset=offset,
-        start_time=start_time,
-        end_time=end_time,
-    )
-    return {"events": events, "total": total, "limit": limit, "offset": offset}
+    """Query events with optional filters and pagination."""
+    try:
+        store = get_store()
+        events, total = store.query_with_total(
+            event_type=event_type,
+            limit=limit,
+            offset=offset,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        page = (offset // limit) + 1 if limit > 0 else 1
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+        return {
+            "items": events,
+            "total": total,
+            "page": page,
+            "page_size": limit,
+            "total_pages": total_pages,
+            "has_next": offset + limit < total,
+            "has_prev": offset > 0,
+        }
+    except Exception as exc:
+        logger.error("Failed to query events: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve events: {type(exc).__name__}",
+        ) from exc
 
 
 @router.get("/stats")

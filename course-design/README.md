@@ -133,4 +133,10 @@ course-design/
 
 ## 许可证
 
-本项目仅供教育和学习用途。
+本项目采用 [MIT 许可证](LICENSE)。
+
+### 第三方依赖许可证声明
+
+- **Ultralytics YOLO**：AGPL-3.0 许可证，详见 [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
+- **YOLOv8 模型权重**：遵循 Ultralytics 许可证条款
+- 其余依赖均为 MIT/BSD 兼容许可证

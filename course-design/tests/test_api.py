@@ -57,10 +57,13 @@ def test_list_events(client, mock_store):
     response = client.get("/api/events/")
     assert response.status_code == 200
     data = response.json()
-    assert "events" in data
+    assert "items" in data
     assert "total" in data
-    assert "limit" in data
-    assert "offset" in data
+    assert "page" in data
+    assert "page_size" in data
+    assert "total_pages" in data
+    assert "has_next" in data
+    assert "has_prev" in data
 
 
 def test_event_stats(client, mock_store):
@@ -130,7 +133,7 @@ def test_event_query_with_filters(client, mock_store):
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
-    assert len(data["events"]) == 1
+    assert len(data["items"]) == 1
 
 
 def test_delete_events(client, mock_store):

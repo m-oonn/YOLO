@@ -16,7 +16,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -61,11 +61,36 @@ app = FastAPI(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler for unhandled errors."""
-    logger.exception("Unhandled exception: %s - %s", type(exc).__name__, exc)
+    """Global exception handler for unhandled errors with structured error response."""
+    request_id = id(request)
+    logger.exception(
+        "[request_id=%s] Unhandled exception: %s - %s at %s %s",
+        request_id,
+        type(exc).__name__,
+        exc,
+        request.method,
+        request.url.path,
+    )
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "type": type(exc).__name__},
+        content={
+            "detail": "Internal server error",
+            "type": type(exc).__name__,
+            "request_id": str(request_id),
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Structured HTTP exception handler with request tracing."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "type": "HTTPException",
+            "status_code": exc.status_code,
+        },
     )
 
 
@@ -118,17 +143,30 @@ async def enforce_api_key(request: Request, call_next):
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log request method, path, status code, and duration."""
+    """Log request method, path, status code, client IP, and duration."""
     start = time.time()
+    client_ip = request.client.host if request.client else "unknown"
     response = await call_next(request)
-    duration = time.time() - start
-    logger.info(
-        "%s %s -> %d (%.2fms)",
-        request.method,
-        request.url.path,
-        response.status_code,
-        duration * 1000,
-    )
+    duration_ms = (time.time() - start) * 1000
+    log_kwargs = {
+        "method": request.method,
+        "path": request.url.path,
+        "status": response.status_code,
+        "client_ip": client_ip,
+        "duration_ms": round(duration_ms, 2),
+    }
+    # user_agent may not exist in test environments
+    try:
+        if request.headers.get("user-agent"):
+            log_kwargs["user_agent"] = request.headers.get("user-agent")
+    except Exception:
+        pass
+    if 400 <= response.status_code < 500:
+        logger.warning("Client error: %(method)s %(path)s -> %(status)d [%(client_ip)s] (%.2fms)", log_kwargs)
+    elif response.status_code >= 500:
+        logger.error("Server error: %(method)s %(path)s -> %(status)d [%(client_ip)s] (%.2fms)", log_kwargs)
+    else:
+        logger.info("%(method)s %(path)s -> %(status)d [%(client_ip)s] (%.2fms)", log_kwargs)
     return response
 
 

@@ -26,6 +26,10 @@ class EventsStore:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # Enable WAL mode for better concurrent read/write performance
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        # Reduce fsync calls for better throughput
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         self._lock = threading.Lock()
         self._vacuum_counter = 0
         self._create_schema()

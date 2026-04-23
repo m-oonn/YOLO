@@ -87,10 +87,24 @@ class AppConfig:
         return os.path.join(self.output_dir, "snapshots")
 
 
-def load_config(path: str) -> AppConfig:
-    """Load YAML configuration file into AppConfig dataclass."""
+def load_config(path: str | None = None) -> AppConfig:
+    """Load YAML configuration file into AppConfig dataclass.
+
+    If *path* is None, loads from ``configs/default.yaml`` relative to
+    the project root.
+    """
+    if path is None:
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "configs",
+            "default.yaml",
+        )
     with open(path, encoding="utf-8") as f:
         raw: dict[str, Any] = yaml.safe_load(f)
+
+    # Guard against empty YAML files (yaml.safe_load returns None)
+    if raw is None:
+        raw = {}
 
     model_cfg = raw.get("model") or {}
     camera_cfg = raw.get("camera") or {}
