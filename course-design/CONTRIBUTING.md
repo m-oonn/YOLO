@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the YOLO Course Design project!
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
+   git clone https://github.com/m-oonn/YOLO.git
    cd YOUR_REPO/course-design
    ```
 
