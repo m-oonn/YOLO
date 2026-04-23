@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Event query API endpoints using shared EventsStore singleton."""
 
 from __future__ import annotations

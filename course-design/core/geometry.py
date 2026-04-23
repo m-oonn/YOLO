@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Geometry utilities for detection and zone checking."""
 
 

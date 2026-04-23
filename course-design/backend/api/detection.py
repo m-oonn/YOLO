@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Detection API endpoints with MJPEG stream for real-time video."""
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ import time
 from contextlib import suppress
 
 import cv2
+import filetype
 import yaml
 from fastapi import APIRouter, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -358,6 +362,14 @@ def save_detection_config(req: SaveConfigRequest):
 
 
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv"}
+ALLOWED_VIDEO_MIME_TYPES = {
+    "video/mp4",
+    "video/x-msvideo",
+    "video/quicktime",
+    "video/x-matroska",
+    "video/x-flv",
+    "video/x-ms-wmv",
+}
 MAX_UPLOAD_SIZE_MB = 100
 MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
@@ -375,7 +387,7 @@ async def upload_video(file: UploadFile = File(...)):
     if ext not in ALLOWED_VIDEO_EXTENSIONS:
         return {
             "status": "error",
-            "message": f"Invalid file type. Allowed: {', '.join(ALLOWED_VIDEO_EXTENSIONS)}",
+            "message": f"Invalid file extension. Allowed: {', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}",
         }
 
     content = await file.read()
@@ -390,11 +402,24 @@ async def upload_video(file: UploadFile = File(...)):
     if content_size == 0:
         return {"status": "error", "message": "Empty file"}
 
+    kind = filetype.guess(content)
+    if kind is None:
+        return {
+            "status": "error",
+            "message": "Unable to determine file type. The file may be corrupted or unsupported.",
+        }
+
+    if kind.mime not in ALLOWED_VIDEO_MIME_TYPES:
+        return {
+            "status": "error",
+            "message": f"File content is not a video (detected: {kind.mime}). Only video files are allowed.",
+        }
+
     dest = os.path.join(upload_dir, f"upload_{int(time.time())}{ext}")
     with open(dest, "wb") as f:
         f.write(content)
 
-    logger.info(f"Uploaded video saved to {dest} (size={content_size} bytes)")
+    logger.info(f"Uploaded video saved to {dest} (size={content_size} bytes, type={kind.mime})")
     return {"status": "uploaded", "path": dest, "filename": file.filename}
 
 

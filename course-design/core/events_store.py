@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Event storage using SQLite for persistence and querying."""
 
 from __future__ import annotations
@@ -151,8 +154,10 @@ class EventsStore:
         where, params = self._build_where(event_type, start_time, end_time)
         with self._lock:
             cur = self.conn.cursor()
-            cur.execute(f"SELECT * FROM events{where} ORDER BY timestamp_s DESC LIMIT ? OFFSET ?",
-                        params + [limit, offset])
+            # NOTE: `where` is constructed from controlled string literals only.
+            # All user-provided values are passed as ? placeholders below.
+            sql = "SELECT * FROM events{w} ORDER BY timestamp_s DESC LIMIT ? OFFSET ?"
+            cur.execute(sql.format(w=where), params + [limit, offset])
             return self._rows_to_dicts(cur.fetchall())
 
     def query_with_total(self, event_type: str | None = None,
@@ -164,15 +169,15 @@ class EventsStore:
         where, params = self._build_where(event_type, start_time, end_time)
         with self._lock:
             cur = self.conn.cursor()
-            cur.execute(
-                f"SELECT *, COUNT(*) OVER() as _total FROM events{where} "
-                f"ORDER BY timestamp_s DESC LIMIT ? OFFSET ?",
-                params + [limit, offset],
+            # NOTE: `where` is constructed from controlled string literals only.
+            sql = (
+                "SELECT *, COUNT(*) OVER() as _total FROM events{w} "
+                "ORDER BY timestamp_s DESC LIMIT ? OFFSET ?"
             )
+            cur.execute(sql.format(w=where), params + [limit, offset])
             rows = cur.fetchall()
             total = rows[0]["_total"] if rows else 0
             results = self._rows_to_dicts(rows)
-            # Remove _total from each result dict
             for r in results:
                 r.pop("_total", None)
             return results, total
@@ -216,7 +221,8 @@ class EventsStore:
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
         with self._lock:
             cur = self.conn.cursor()
-            cur.execute(f"DELETE FROM events{where}", params)
+            # NOTE: `where` is constructed from controlled string literals only.
+            cur.execute("DELETE FROM events{w}".format(w=where), params)
             deleted = cur.rowcount
             self.conn.commit()
             return deleted

@@ -1,3 +1,8 @@
+<!--
+  Copyright (c) 2025 YOLO Course Design Contributors
+  SPDX-License-Identifier: MIT
+-->
+
 <template>
   <div id="app-container">
     <el-container>
@@ -6,17 +11,13 @@
           <h1 class="app-title">YOLO 课程设计 — 实时目标检测系统</h1>
         </div>
         <div class="header-right">
-          <el-tag type="success" size="small" v-if="connected">已连接</el-tag>
-          <el-tag type="danger" size="small" v-else>未连接</el-tag>
+          <el-tag v-if="connected" type="success" size="small">已连接</el-tag>
+          <el-tag v-else type="danger" size="small">未连接</el-tag>
         </div>
       </el-header>
       <el-container>
         <el-aside width="200px">
-          <el-menu
-            :default-active="route.path"
-            router
-            class="nav-menu"
-          >
+          <el-menu :default-active="route.path" router class="nav-menu">
             <el-menu-item index="/monitor">
               <el-icon><Monitor /></el-icon>
               <span>实时监控</span>
@@ -68,9 +69,19 @@ onUnmounted(() => {
 </script>
 
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-#app-container { height: 100vh; display: flex; flex-direction: column; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 .app-header {
   display: flex;
   align-items: center;
@@ -80,9 +91,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   padding: 0 20px;
   height: 60px !important;
 }
-.app-title { font-size: 18px; font-weight: 600; }
-.header-right { display: flex; align-items: center; gap: 10px; }
-.nav-menu { height: 100%; border-right: none; }
+.app-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nav-menu {
+  height: 100%;
+  border-right: none;
+}
 .app-main {
   background: #f5f7fa;
   padding: 20px;

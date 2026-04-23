@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Command-line detection runner for testing without the web interface."""
 
 import argparse

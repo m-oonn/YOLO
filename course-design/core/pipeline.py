@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Core detection pipeline: captures video, runs YOLO inference, applies rules, stores events."""
 
 from __future__ import annotations

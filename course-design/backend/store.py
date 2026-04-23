@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Shared EventsStore singleton for cross-module access."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Rules engine for behavior detection from YOLO detections.
 
 Supports: running, falling, crowd detection, intrusion, and fight detection.

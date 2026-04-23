@@ -23,7 +23,7 @@
 
     <!-- Stats Overview -->
     <el-row :gutter="16" style="margin-bottom: 16px">
-      <el-col :span="typeSpan" v-for="(count, type) in statsByType" :key="type">
+      <el-col v-for="(count, type) in statsByType" :key="type" :span="typeSpan">
         <el-card shadow="never" :body-style="{ padding: '16px' }">
           <div class="stat-item">
             <span class="stat-label">{{ type }}</span>
@@ -77,7 +77,7 @@
       </el-table>
 
       <!-- Pagination -->
-      <div class="pagination-wrapper" v-if="total > pageSize">
+      <div v-if="total > pageSize" class="pagination-wrapper">
         <el-pagination
           v-model:current-page="page"
           :page-size="pageSize"
@@ -153,15 +153,23 @@ const confirmClearAll = () => {
     confirmButtonText: '清空',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(async () => {
-    await eventsAPI.deleteAll()
-    loadEvents()
-    loadStats()
-  }).catch(() => {})
+  })
+    .then(async () => {
+      await eventsAPI.deleteAll()
+      loadEvents()
+      loadStats()
+    })
+    .catch(() => {})
 }
 
 const eventTypeColor = (type) => {
-  const colors = { running: 'warning', fall: 'danger', crowd: 'info', intrusion: 'danger', fight: 'danger' }
+  const colors = {
+    running: 'warning',
+    fall: 'danger',
+    crowd: 'info',
+    intrusion: 'danger',
+    fight: 'danger',
+  }
   return colors[type] || 'info'
 }
 
@@ -178,13 +186,46 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.events-container { display: flex; flex-direction: column; gap: 16px; }
-.filter-card { flex-shrink: 0; }
-.total-text { color: #666; font-size: 14px; }
-.stat-item { display: flex; justify-content: space-between; align-items: center; }
-.stat-label { font-size: 14px; color: #666; }
-.stat-value { font-size: 24px; font-weight: 700; color: #409eff; }
-.pagination-wrapper { display: flex; justify-content: center; margin-top: 16px; }
-.snapshot-thumb { width: 48px; height: 36px; border-radius: 4px; cursor: pointer; object-fit: cover; }
-.no-snap { color: #ccc; font-size: 12px; }
+.events-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.filter-card {
+  flex-shrink: 0;
+}
+.total-text {
+  color: #666;
+  font-size: 14px;
+}
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stat-label {
+  font-size: 14px;
+  color: #666;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #409eff;
+}
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+.snapshot-thumb {
+  width: 48px;
+  height: 36px;
+  border-radius: 4px;
+  cursor: pointer;
+  object-fit: cover;
+}
+.no-snap {
+  color: #ccc;
+  font-size: 12px;
+}
 </style>

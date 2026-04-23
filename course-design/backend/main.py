@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """FastAPI application entry point for YOLO course project."""
 
 from __future__ import annotations

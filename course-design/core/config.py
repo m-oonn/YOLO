@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Configuration loading and dataclasses for detection engine."""
 
 from __future__ import annotations

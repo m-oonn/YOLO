@@ -16,6 +16,12 @@ models/*.pt
 # Node
 node_modules/
 dist/
+frontend/dist/
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
 
 # IDE
 .vscode/
