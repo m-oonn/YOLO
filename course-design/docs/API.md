@@ -5,6 +5,64 @@
 - **Base URL**: `http://localhost:8000`
 - **交互式文档**: `http://localhost:8000/docs`
 
+## 身份验证
+
+### API Key 认证
+
+当设置了 `API_KEY` 环境变量时，所有 `/api/*` 端点都需要有效的 API 密钥。
+
+**认证方式（任选其一）：**
+
+1. **请求头方式**（推荐）：
+   ```
+   X-API-Key: your-api-key-here
+   ```
+
+2. **查询参数方式**：
+   ```
+   GET /api/events/?api_key=your-api-key-here
+   ```
+
+**公开端点（无需认证）：**
+- `/health` — 健康检查
+- `/` — API 根信息
+- `/docs` — Swagger 文档
+- `/api/detection/stream.mjpg` — MJPEG 视频流
+- `/api/detection/stream` — WebSocket 实时状态
+
+**配置方法：**
+
+```bash
+# 生成安全的 API Key
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# 设置环境变量（Linux/macOS）
+export API_KEY=your-generated-key-here
+
+# 设置环境变量（Windows PowerShell）
+$env:API_KEY="your-generated-key-here"
+
+# 在 Docker 中使用
+docker run -e API_KEY=your-generated-key-here ...
+```
+
+**使用示例：**
+
+```bash
+# curl 示例
+curl -H "X-API-Key: your-key" http://localhost:8000/api/events/
+
+# 带 API Key 的事件查询
+curl "http://localhost:8000/api/events/?api_key=your-key&event_type=running"
+
+# Python requests 示例
+import requests
+headers = {"X-API-Key": "your-key"}
+response = requests.get("http://localhost:8000/api/events/", headers=headers)
+```
+
+> **注意**：开发模式下如果不设置 `API_KEY`，所有端点均可无需认证访问。生产环境强烈建议设置 `API_KEY`。
+
 ## 端点
 
 ### 健康检查

@@ -4,7 +4,6 @@
 """Geometry utilities for detection and zone checking."""
 
 
-
 def point_in_polygon(x: float, y: float, polygon: list[list[float]]) -> bool:
     """Ray casting algorithm for point-in-polygon test."""
     inside = False
@@ -14,7 +13,9 @@ def point_in_polygon(x: float, y: float, polygon: list[list[float]]) -> bool:
     for i in range(n):
         x1, y1 = polygon[i]
         x2, y2 = polygon[(i + 1) % n]
-        intersects = ((y1 > y) != (y2 > y)) and (x < (x2 - x1) * (y - y1) / (y2 - y1 + 1e-12) + x1)
+        intersects = ((y1 > y) != (y2 > y)) and (
+            x < (x2 - x1) * (y - y1) / (y2 - y1 + 1e-12) + x1
+        )
         if intersects:
             inside = not inside
     return inside

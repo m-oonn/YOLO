@@ -110,7 +110,12 @@ def load_config(path: str) -> AppConfig:
     intrusion_raw = rules_raw.get("intrusion", {})
     zones = []
     for z in intrusion_raw.get("zones", []) or []:
-        zones.append(Zone(name=str(z["name"]), polygon=[[float(x), float(y)] for x, y in z["polygon"]]))
+        zones.append(
+            Zone(
+                name=str(z["name"]),
+                polygon=[[float(x), float(y)] for x, y in z["polygon"]],
+            )
+        )
     intrusion = IntrusionRule(
         enabled=bool(intrusion_raw.get("enabled", False)),
         zones=zones,

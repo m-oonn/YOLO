@@ -23,20 +23,32 @@ def _list_camera_devices() -> list[dict]:
                 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 fps = cap.get(cv2.CAP_PROP_FPS)
-                devices.append({
-                    "id": i,
-                    "name": f"Camera {i}",
-                    "available": True,
-                    "resolution": f"{width}x{height}" if width > 0 else "unknown",
-                    "fps": round(fps) if fps > 0 else 30,
-                })
+                devices.append(
+                    {
+                        "id": i,
+                        "name": f"Camera {i}",
+                        "available": True,
+                        "resolution": f"{width}x{height}" if width > 0 else "unknown",
+                        "fps": round(fps) if fps > 0 else 30,
+                    }
+                )
                 cap.release()
                 break  # Stop after first available camera
         except Exception:
             continue
-    return devices if devices else [
-        {"id": 0, "name": "Camera 0", "available": True, "resolution": "640x480", "fps": 30}
-    ]
+    return (
+        devices
+        if devices
+        else [
+            {
+                "id": 0,
+                "name": "Camera 0",
+                "available": True,
+                "resolution": "640x480",
+                "fps": 30,
+            }
+        ]
+    )
 
 
 @router.get("/")

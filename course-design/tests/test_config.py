@@ -119,6 +119,7 @@ def test_empty_config_uses_defaults():
 
 def test_snapshots_dir_property():
     import os
+
     cfg = AppConfig(output_dir="outputs")
     expected = os.path.join("outputs", "snapshots")
     assert cfg.snapshots_dir == expected

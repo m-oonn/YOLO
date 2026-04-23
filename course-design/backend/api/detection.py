@@ -118,7 +118,9 @@ def _run_detection(source: str, config_path: str):
                 has_viewers = _mjpeg_client_count > 0
             if has_viewers:
                 annotated = pipeline.annotate_frame(frame, pipeline._last_detections)
-                _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                _, buffer = cv2.imencode(
+                    ".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80]
+                )
                 _latest_frame = buffer.tobytes()
                 _frame_ready.set()
             else:
@@ -132,7 +134,9 @@ def _run_detection(source: str, config_path: str):
             sleep_time = max(0, target_frame_dt - processing_time)
             time.sleep(sleep_time)
 
-        logger.info(f"Detection loop ended for {source}, processed {frame_count} frames")
+        logger.info(
+            f"Detection loop ended for {source}, processed {frame_count} frames"
+        )
 
     except Exception as e:
         logger.error(f"Detection error in thread {thread_name}: {e}", exc_info=True)
@@ -156,7 +160,9 @@ def _run_detection(source: str, config_path: str):
                     _pipeline = None
                 _latest_frame = None
                 _detection_active = False
-                logger.info(f"Detection thread {thread_name} cleanup complete, active={_detection_active}")
+                logger.info(
+                    f"Detection thread {thread_name} cleanup complete, active={_detection_active}"
+                )
         except Exception as e:
             logger.error(f"Error cleaning up pipeline: {e}")
             with _pipeline_lock:
@@ -211,8 +217,13 @@ def start_detection(req: DetectionStartRequest):
             # Give it a moment to clean up
             _pipeline_thread.join(timeout=2.0)
             if _pipeline_thread.is_alive():
-                logger.error("Previous detection thread failed to stop, cannot start new detection")
-                return {"status": "error", "message": "Previous detection still stopping"}
+                logger.error(
+                    "Previous detection thread failed to stop, cannot start new detection"
+                )
+                return {
+                    "status": "error",
+                    "message": "Previous detection still stopping",
+                }
 
     config_path = _resolve_config_path(req.config)
 
@@ -303,11 +314,15 @@ def save_detection_config(req: SaveConfigRequest):
                 "enabled": req.rules.get("running", {}).get("enabled", True),
                 "speed_px_s": int(req.rules.get("running", {}).get("speed_px_s", 50)),
                 "min_duration_s": 0.3,
-                "debounce_s": float(req.rules.get("running", {}).get("debounce_s", 5.0)),
+                "debounce_s": float(
+                    req.rules.get("running", {}).get("debounce_s", 5.0)
+                ),
             },
             "fall": {
                 "enabled": req.rules.get("fall", {}).get("enabled", True),
-                "upright_aspect_min": float(req.rules.get("fall", {}).get("upright_aspect_min", 1.2)),
+                "upright_aspect_min": float(
+                    req.rules.get("fall", {}).get("upright_aspect_min", 1.2)
+                ),
                 "fallen_aspect_max": 1.0,
                 "transition_window_s": 1.0,
                 "debounce_s": float(req.rules.get("fall", {}).get("debounce_s", 5.0)),
@@ -315,21 +330,37 @@ def save_detection_config(req: SaveConfigRequest):
             "crowd": {
                 "enabled": req.rules.get("crowd", {}).get("enabled", True),
                 "min_people": int(req.rules.get("crowd", {}).get("min_people", 3)),
-                "proximity_px": float(req.rules.get("crowd", {}).get("proximity_px", 200.0)),
+                "proximity_px": float(
+                    req.rules.get("crowd", {}).get("proximity_px", 200.0)
+                ),
                 "debounce_s": float(req.rules.get("crowd", {}).get("debounce_s", 10.0)),
             },
             "intrusion": {
                 "enabled": req.rules.get("intrusion", {}).get("enabled", True),
-                "debounce_s": float(req.rules.get("intrusion", {}).get("debounce_s", 5.0)),
-                "zones": req.rules.get("intrusion", {}).get("zones", [
-                    {"name": "lab", "polygon": [[60, 60], [580, 60], [580, 340], [60, 340]]}
-                ]),
+                "debounce_s": float(
+                    req.rules.get("intrusion", {}).get("debounce_s", 5.0)
+                ),
+                "zones": req.rules.get("intrusion", {}).get(
+                    "zones",
+                    [
+                        {
+                            "name": "lab",
+                            "polygon": [[60, 60], [580, 60], [580, 340], [60, 340]],
+                        }
+                    ],
+                ),
             },
             "fight": {
                 "enabled": req.rules.get("fight", {}).get("enabled", True),
-                "distance_threshold": int(req.rules.get("fight", {}).get("distance_threshold", 150)),
-                "movement_threshold": int(req.rules.get("fight", {}).get("movement_threshold", 30)),
-                "min_duration_s": float(req.rules.get("fight", {}).get("min_duration_s", 0.5)),
+                "distance_threshold": int(
+                    req.rules.get("fight", {}).get("distance_threshold", 150)
+                ),
+                "movement_threshold": int(
+                    req.rules.get("fight", {}).get("movement_threshold", 30)
+                ),
+                "min_duration_s": float(
+                    req.rules.get("fight", {}).get("min_duration_s", 0.5)
+                ),
                 "debounce_s": float(req.rules.get("fight", {}).get("debounce_s", 5.0)),
             },
         },
@@ -419,7 +450,9 @@ async def upload_video(file: UploadFile = File(...)):
     with open(dest, "wb") as f:
         f.write(content)
 
-    logger.info(f"Uploaded video saved to {dest} (size={content_size} bytes, type={kind.mime})")
+    logger.info(
+        f"Uploaded video saved to {dest} (size={content_size} bytes, type={kind.mime})"
+    )
     return {"status": "uploaded", "path": dest, "filename": file.filename}
 
 

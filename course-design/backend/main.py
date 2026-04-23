@@ -16,7 +16,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -68,6 +68,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error", "type": type(exc).__name__},
     )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -76,6 +77,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── API Key Authentication Middleware ──────────────────────────
+# Reads API_KEY from env. If set, all /api/* endpoints require
+# a matching X-API-Key header (or ?api_key= query param).
+# Public endpoints (health, docs, streams) are always accessible.
+_API_KEY = os.environ.get("API_KEY")
+_PUBLIC_PREFIXES = (
+    "/health",
+    "/",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/api/detection/stream.mjpg",
+    "/api/detection/stream",
+)
+
+
+@app.middleware("http")
+async def enforce_api_key(request: Request, call_next):
+    """Reject requests with invalid/missing API key when API_KEY is configured."""
+    if _API_KEY:
+        path = request.url.path
+        # Check if this is a public endpoint
+        is_public = any(path.startswith(p) for p in _PUBLIC_PREFIXES)
+        if not is_public:
+            provided = request.headers.get("X-API-Key") or request.query_params.get(
+                "api_key"
+            )
+            if not provided or provided != _API_KEY:
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={
+                        "detail": "Invalid or missing API key. "
+                        "Provide via X-API-Key header or ?api_key= query param.",
+                    },
+                    headers={"WWW-Authenticate": "APIKey"},
+                )
+    return await call_next(request)
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -83,8 +122,13 @@ async def log_requests(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
     duration = time.time() - start
-    logger.info("%s %s -> %d (%.2fms)", request.method, request.url.path,
-                response.status_code, duration * 1000)
+    logger.info(
+        "%s %s -> %d (%.2fms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration * 1000,
+    )
     return response
 
 

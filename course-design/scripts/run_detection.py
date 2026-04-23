@@ -25,12 +25,21 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Run YOLO detection pipeline")
-    parser.add_argument("--source", type=str, default="0",
-                        help="Video source: camera index (0) or file path")
-    parser.add_argument("--config", type=str, default="configs/default.yaml",
-                        help="Configuration file path")
-    parser.add_argument("--save-video", type=str, default=None,
-                        help="Save output to video file")
+    parser.add_argument(
+        "--source",
+        type=str,
+        default="0",
+        help="Video source: camera index (0) or file path",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/default.yaml",
+        help="Configuration file path",
+    )
+    parser.add_argument(
+        "--save-video", type=str, default=None, help="Save output to video file"
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -77,11 +86,16 @@ def main():
                 except cv2.error:
                     logger.warning("No display available, disabling view mode")
                     cfg_dict = {
-                        "model_path": cfg.model_path, "device": cfg.device,
-                        "imgsz": cfg.imgsz, "conf": cfg.conf, "iou": cfg.iou,
-                        "classes": cfg.classes, "camera_fps": cfg.camera_fps,
+                        "model_path": cfg.model_path,
+                        "device": cfg.device,
+                        "imgsz": cfg.imgsz,
+                        "conf": cfg.conf,
+                        "iou": cfg.iou,
+                        "classes": cfg.classes,
+                        "camera_fps": cfg.camera_fps,
                         "output_dir": cfg.output_dir,
-                        "save_snapshots": cfg.save_snapshots, "view": False,
+                        "save_snapshots": cfg.save_snapshots,
+                        "view": False,
                         "rules": cfg.rules,
                     }
                     cfg = AppConfig(**cfg_dict)

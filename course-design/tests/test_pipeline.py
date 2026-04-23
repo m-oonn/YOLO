@@ -1,4 +1,5 @@
 """Tests for DetectionPipeline."""
+
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -119,12 +120,7 @@ def test_annotate_frame(config):
         pipeline = DetectionPipeline(config)
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         detections = [
-            Detection(
-                track_id=1,
-                class_id=0,
-                conf=0.9,
-                x1=100, y1=100, x2=200, y2=300
-            )
+            Detection(track_id=1, class_id=0, conf=0.9, x1=100, y1=100, x2=200, y2=300)
         ]
         annotated = pipeline.annotate_frame(frame, detections)
         assert annotated.shape == frame.shape
@@ -141,12 +137,7 @@ def test_serialize_detections(config):
 
         pipeline = DetectionPipeline(config)
         detections = [
-            Detection(
-                track_id=1,
-                class_id=0,
-                conf=0.9,
-                x1=100, y1=100, x2=200, y2=300
-            )
+            Detection(track_id=1, class_id=0, conf=0.9, x1=100, y1=100, x2=200, y2=300)
         ]
         serialized = pipeline._serialize_detections(detections)
         assert len(serialized) == 1
@@ -157,7 +148,9 @@ def test_serialize_detections(config):
         assert "bbox" in serialized[0]
 
 
-@pytest.mark.skip(reason="Integration test requiring full YOLO mock - complex to mock correctly")
+@pytest.mark.skip(
+    reason="Integration test requiring full YOLO mock - complex to mock correctly"
+)
 def test_pipeline_with_mocked_results(config):
     """Integration test for pipeline with mocked YOLO results."""
     with patch("core.pipeline.YOLO") as mock_yolo:

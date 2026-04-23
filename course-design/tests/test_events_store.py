@@ -1,9 +1,7 @@
 """Tests for EventsStore."""
 
-import json
 import os
 import sys
-import tempfile
 
 COURSE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if COURSE_DIR not in sys.path:
@@ -24,9 +22,17 @@ def store(tmp_path):
     s.close()
 
 
-def _make_event(event_type="running", timestamp_s=100.0, frame_index=1,
-                track_id=1, zone_name=None, confidence=0.9,
-                bbox=None, description=None, extra=None):
+def _make_event(
+    event_type="running",
+    timestamp_s=100.0,
+    frame_index=1,
+    track_id=1,
+    zone_name=None,
+    confidence=0.9,
+    bbox=None,
+    description=None,
+    extra=None,
+):
     return Event(
         event_type=event_type,
         timestamp_s=timestamp_s,
@@ -189,7 +195,7 @@ def test_delete_events_combined_filters(store):
 
 
 def test_clear_all(store):
-    for i in range(5):
+    for _ in range(5):
         store.record(_make_event())
     assert store.count() == 5
     deleted = store.clear_all()

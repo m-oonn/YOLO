@@ -53,7 +53,9 @@ def event_types():
 @router.delete("/")
 def delete_events(
     event_type: str | None = Query(None, description="Filter by event type"),
-    before: float | None = Query(None, description="Delete events before this timestamp"),
+    before: float | None = Query(
+        None, description="Delete events before this timestamp"
+    ),
 ):
     """Delete events matching filters."""
     store = get_store()

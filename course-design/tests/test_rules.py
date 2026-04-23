@@ -23,30 +23,54 @@ PERSON = 0
 
 
 def _make_cfg(
-    running=True, speed_px_s=50, min_duration_s=0.0,
-    fall=True, upright_aspect_min=1.2, fallen_aspect_max=1.0, transition_window_s=1.0,
-    crowd=True, min_people=3,
+    running=True,
+    speed_px_s=50,
+    min_duration_s=0.0,
+    fall=True,
+    upright_aspect_min=1.2,
+    fallen_aspect_max=1.0,
+    transition_window_s=1.0,
+    crowd=True,
+    min_people=3,
     intrusion=False,
-    fight=True, distance_threshold=150, movement_threshold=30, fight_min_duration_s=0.0,
+    fight=True,
+    distance_threshold=150,
+    movement_threshold=30,
+    fight_min_duration_s=0.0,
 ) -> AppConfig:
     return AppConfig(
         model_path="dummy.pt",
         rules=RulesConfig(
-            running=RunningRule(enabled=running, speed_px_s=speed_px_s, min_duration_s=min_duration_s),
-            fall=FallRule(enabled=fall, upright_aspect_min=upright_aspect_min, fallen_aspect_max=fallen_aspect_max, transition_window_s=transition_window_s),
+            running=RunningRule(
+                enabled=running, speed_px_s=speed_px_s, min_duration_s=min_duration_s
+            ),
+            fall=FallRule(
+                enabled=fall,
+                upright_aspect_min=upright_aspect_min,
+                fallen_aspect_max=fallen_aspect_max,
+                transition_window_s=transition_window_s,
+            ),
             crowd=CrowdRule(enabled=crowd, min_people=min_people),
             intrusion=IntrusionRule(enabled=intrusion),
-            fight=FightRule(enabled=fight, distance_threshold=distance_threshold, movement_threshold=movement_threshold, min_duration_s=fight_min_duration_s),
+            fight=FightRule(
+                enabled=fight,
+                distance_threshold=distance_threshold,
+                movement_threshold=movement_threshold,
+                min_duration_s=fight_min_duration_s,
+            ),
         ),
     )
 
 
 def _person(track_id, x1, y1, x2, y2, conf=0.9):
-    return Detection(track_id=track_id, class_id=PERSON, conf=conf, x1=x1, y1=y1, x2=x2, y2=y2)
+    return Detection(
+        track_id=track_id, class_id=PERSON, conf=conf, x1=x1, y1=y1, x2=x2, y2=y2
+    )
 
 
 # ---- Running Detection ----
 # State machine: frame1 (build history) -> frame2 (start timer, continue) -> frame3+ (emit)
+
 
 def test_running_detection_triggers():
     cfg = _make_cfg(speed_px_s=50, min_duration_s=0.0)
@@ -87,6 +111,7 @@ def test_running_detection_below_threshold():
 
 # ---- Fall Detection ----
 
+
 def test_fall_detection_triggers():
     cfg = _make_cfg(upright_aspect_min=1.2, fallen_aspect_max=1.0)
     engine = RulesEngine(cfg, person_class_id=PERSON)
@@ -115,6 +140,7 @@ def test_fall_no_false_positive():
 
 
 # ---- Crowd Detection ----
+
 
 def test_crowd_detection_triggers():
     cfg = _make_cfg(min_people=3)
@@ -145,6 +171,7 @@ def test_crowd_below_threshold():
 
 # ---- Intrusion Detection ----
 
+
 def test_intrusion_detection_triggers():
     cfg = AppConfig(
         model_path="dummy.pt",
@@ -154,7 +181,12 @@ def test_intrusion_detection_triggers():
             crowd=CrowdRule(enabled=False),
             intrusion=IntrusionRule(
                 enabled=True,
-                zones=[Zone(name="restricted", polygon=[[0,0],[100,0],[100,100],[0,100]])],
+                zones=[
+                    Zone(
+                        name="restricted",
+                        polygon=[[0, 0], [100, 0], [100, 100], [0, 100]],
+                    )
+                ],
             ),
             fight=FightRule(enabled=False),
         ),
@@ -177,7 +209,12 @@ def test_intrusion_outside_zone():
             crowd=CrowdRule(enabled=False),
             intrusion=IntrusionRule(
                 enabled=True,
-                zones=[Zone(name="restricted", polygon=[[0,0],[100,0],[100,100],[0,100]])],
+                zones=[
+                    Zone(
+                        name="restricted",
+                        polygon=[[0, 0], [100, 0], [100, 100], [0, 100]],
+                    )
+                ],
             ),
             fight=FightRule(enabled=False),
         ),
@@ -192,8 +229,11 @@ def test_intrusion_outside_zone():
 # ---- Fight Detection ----
 # State machine: frame1 (build history) -> frame2 (start timer, continue) -> frame3+ (emit)
 
+
 def test_fight_detection_triggers():
-    cfg = _make_cfg(distance_threshold=150, movement_threshold=30, fight_min_duration_s=0.0)
+    cfg = _make_cfg(
+        distance_threshold=150, movement_threshold=30, fight_min_duration_s=0.0
+    )
     engine = RulesEngine(cfg, person_class_id=PERSON)
     t = 100.0
 
@@ -218,6 +258,7 @@ def test_fight_detection_triggers():
 
 
 # ---- Debounce ----
+
 
 def test_debounce_prevents_duplicate_events():
     cfg = _make_cfg(speed_px_s=50, min_duration_s=0.0)
@@ -244,6 +285,7 @@ def test_debounce_prevents_duplicate_events():
 
 # ---- Rules can be disabled ----
 
+
 def test_disabled_rule_does_not_fire():
     cfg = _make_cfg(running=False, speed_px_s=50, min_duration_s=0.0)
     engine = RulesEngine(cfg, person_class_id=PERSON)
@@ -258,7 +300,9 @@ def test_disabled_rule_does_not_fire():
 
 
 def test_all_rules_disabled():
-    cfg = _make_cfg(running=False, fall=False, crowd=False, intrusion=False, fight=False)
+    cfg = _make_cfg(
+        running=False, fall=False, crowd=False, intrusion=False, fight=False
+    )
     engine = RulesEngine(cfg, person_class_id=PERSON)
 
     dets = [_person(1, 0, 0, 10, 20), _person(2, 50, 50, 60, 70)]
@@ -286,7 +330,14 @@ def test_non_person_detections():
 
 def test_crowd_with_sparse_people():
     """Crowd detection should not trigger when people are far apart."""
-    cfg = _make_cfg(crowd=True, min_people=2, intrusion=False, fight=False, running=False, fall=False)
+    cfg = _make_cfg(
+        crowd=True,
+        min_people=2,
+        intrusion=False,
+        fight=False,
+        running=False,
+        fall=False,
+    )
     engine = RulesEngine(cfg, person_class_id=PERSON)
     # Two people far apart (distance >> proximity_px of 200)
     dets = [
@@ -306,7 +357,9 @@ def test_multiple_events_same_frame():
     # Two people, one running and one stationary - frame 1
     engine.update([_person(1, 0, 0, 10, 20), _person(2, 100, 100, 110, 120)], 1, t)
     # Frame 2: person 1 moves fast
-    engine.update([_person(1, 200, 200, 210, 220), _person(2, 100, 100, 110, 120)], 2, t + 0.01)
+    engine.update(
+        [_person(1, 200, 200, 210, 220), _person(2, 100, 100, 110, 120)], 2, t + 0.01
+    )
     # Frame 3: person 1 keeps moving fast
     dets = [_person(1, 400, 400, 410, 420), _person(2, 100, 100, 110, 120)]
     events = engine.update(dets, 3, t + 0.02)

@@ -81,7 +81,11 @@ class DetectionPipeline:
                     snapshot = None
                     if self.cfg.save_snapshots and event.bbox:
                         ts_ms = int(timestamp_s * 1000)
-                        tid_part = f"_tid{event.track_id}" if event.track_id is not None else ""
+                        tid_part = (
+                            f"_tid{event.track_id}"
+                            if event.track_id is not None
+                            else ""
+                        )
                         zone_part = f"_{event.zone_name}" if event.zone_name else ""
                         fn = f"{event.event_type}{zone_part}{tid_part}_{ts_ms}.jpg"
                         snapshot = os.path.join(self.cfg.snapshots_dir, fn)
@@ -104,25 +108,31 @@ class DetectionPipeline:
 
         boxes = results[0].boxes
         xyxy = boxes.xyxy.cpu().numpy()
-        confs = boxes.conf.cpu().numpy() if boxes.conf is not None else [1.0] * len(xyxy)
+        confs = (
+            boxes.conf.cpu().numpy() if boxes.conf is not None else [1.0] * len(xyxy)
+        )
         clss = boxes.cls.cpu().numpy() if boxes.cls is not None else [0] * len(xyxy)
         ids = boxes.id.cpu().numpy() if boxes.id is not None else [None] * len(xyxy)
 
         for i in range(len(xyxy)):
             track_id = int(ids[i]) if ids[i] is not None else None
             class_id = int(clss[i]) if i < len(clss) else 0
-            detections.append(Detection(
-                track_id=track_id,
-                class_id=class_id,
-                conf=float(confs[i]),
-                x1=float(xyxy[i][0]),
-                y1=float(xyxy[i][1]),
-                x2=float(xyxy[i][2]),
-                y2=float(xyxy[i][3]),
-            ))
+            detections.append(
+                Detection(
+                    track_id=track_id,
+                    class_id=class_id,
+                    conf=float(confs[i]),
+                    x1=float(xyxy[i][0]),
+                    y1=float(xyxy[i][1]),
+                    x2=float(xyxy[i][2]),
+                    y2=float(xyxy[i][3]),
+                )
+            )
         return detections
 
-    def _serialize_detections(self, detections: list[Detection]) -> list[dict[str, Any]]:
+    def _serialize_detections(
+        self, detections: list[Detection]
+    ) -> list[dict[str, Any]]:
         return [
             {
                 "track_id": d.track_id,
@@ -134,7 +144,9 @@ class DetectionPipeline:
             for d in detections
         ]
 
-    def annotate_frame(self, frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
+    def annotate_frame(
+        self, frame: np.ndarray, detections: list[Detection]
+    ) -> np.ndarray:
         """Draw bounding boxes, labels, and zone overlays on frame."""
         out = frame.copy()
 
@@ -144,8 +156,15 @@ class DetectionPipeline:
                 pts = [(int(x), int(y)) for x, y in zone.polygon]
                 if len(pts) >= 3:
                     cv2.polylines(out, [np.array(pts)], True, (255, 0, 0), 2)
-                    cv2.putText(out, zone.name, (pts[0][0], max(0, pts[0][1] - 5)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    cv2.putText(
+                        out,
+                        zone.name,
+                        (pts[0][0], max(0, pts[0][1] - 5)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (255, 0, 0),
+                        2,
+                    )
 
         # Draw detections
         for d in detections:
@@ -155,14 +174,28 @@ class DetectionPipeline:
             label = f"{get_class_name(d.class_id)} {d.conf:.2f}"
             if d.track_id is not None:
                 label = f"ID:{d.track_id} {label}"
-            cv2.putText(out, label, (x1, max(0, y1 - 8)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(
+                out,
+                label,
+                (x1, max(0, y1 - 8)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                1,
+            )
 
         # Draw FPS counter
         elapsed = time.time() - self._start_time
         fps = self._frame_count / max(1e-6, elapsed)
-        cv2.putText(out, f"FPS: {fps:.1f}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(
+            out,
+            f"FPS: {fps:.1f}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+        )
 
         return out
 

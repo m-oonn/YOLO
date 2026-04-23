@@ -47,9 +47,13 @@ class EventsStore:
                 description TEXT
             );
         """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_s);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_s);"
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type, timestamp_s);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type, timestamp_s);"
+        )
         self.conn.commit()
 
     def record_batch(self, events_with_paths: list[tuple[Event, str | None]]) -> int:
@@ -68,9 +72,18 @@ class EventsStore:
                            (event_type, timestamp_s, frame_index, track_id, zone_name,
                             confidence, bbox_json, snapshot_path, extra_json, description)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (event.event_type, event.timestamp_s, event.frame_index,
-                         event.track_id, event.zone_name, event.confidence,
-                         bbox_json, snapshot_path, extra_json, event.description),
+                        (
+                            event.event_type,
+                            event.timestamp_s,
+                            event.frame_index,
+                            event.track_id,
+                            event.zone_name,
+                            event.confidence,
+                            bbox_json,
+                            snapshot_path,
+                            extra_json,
+                            event.description,
+                        ),
                     )
                     success += 1
                 self.conn.commit()
@@ -96,9 +109,18 @@ class EventsStore:
                        (event_type, timestamp_s, frame_index, track_id, zone_name,
                         confidence, bbox_json, snapshot_path, extra_json, description)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (event.event_type, event.timestamp_s, event.frame_index,
-                     event.track_id, event.zone_name, event.confidence,
-                     bbox_json, snapshot_path, extra_json, event.description),
+                    (
+                        event.event_type,
+                        event.timestamp_s,
+                        event.frame_index,
+                        event.track_id,
+                        event.zone_name,
+                        event.confidence,
+                        bbox_json,
+                        snapshot_path,
+                        extra_json,
+                        event.description,
+                    ),
                 )
                 self.conn.commit()
                 # Periodic VACUUM to prevent unbounded DB growth
@@ -146,10 +168,14 @@ class EventsStore:
             results.append(d)
         return results
 
-    def query(self, event_type: str | None = None,
-              limit: int = 100, offset: int = 0,
-              start_time: float | None = None,
-              end_time: float | None = None) -> list[dict[str, Any]]:
+    def query(
+        self,
+        event_type: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        start_time: float | None = None,
+        end_time: float | None = None,
+    ) -> list[dict[str, Any]]:
         """Query events with optional filters. Thread-safe via internal lock."""
         where, params = self._build_where(event_type, start_time, end_time)
         with self._lock:
@@ -160,11 +186,14 @@ class EventsStore:
             cur.execute(sql.format(w=where), params + [limit, offset])
             return self._rows_to_dicts(cur.fetchall())
 
-    def query_with_total(self, event_type: str | None = None,
-                         limit: int = 100, offset: int = 0,
-                         start_time: float | None = None,
-                         end_time: float | None = None
-                         ) -> tuple[list[dict[str, Any]], int]:
+    def query_with_total(
+        self,
+        event_type: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        start_time: float | None = None,
+        end_time: float | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
         """Query events with total count in a single query using window function."""
         where, params = self._build_where(event_type, start_time, end_time)
         with self._lock:
@@ -187,7 +216,9 @@ class EventsStore:
         with self._lock:
             cur = self.conn.cursor()
             if event_type:
-                cur.execute("SELECT COUNT(*) FROM events WHERE event_type = ?", (event_type,))
+                cur.execute(
+                    "SELECT COUNT(*) FROM events WHERE event_type = ?", (event_type,)
+                )
             else:
                 cur.execute("SELECT COUNT(*) FROM events")
             return cur.fetchone()[0]
@@ -196,9 +227,13 @@ class EventsStore:
         """Get summary statistics about stored events. Thread-safe."""
         with self._lock:
             cur = self.conn.cursor()
-            cur.execute("SELECT event_type, COUNT(*) as count FROM events GROUP BY event_type")
+            cur.execute(
+                "SELECT event_type, COUNT(*) as count FROM events GROUP BY event_type"
+            )
             type_counts = {row["event_type"]: row["count"] for row in cur.fetchall()}
-            cur.execute("SELECT MIN(timestamp_s) as first, MAX(timestamp_s) as last FROM events")
+            cur.execute(
+                "SELECT MIN(timestamp_s) as first, MAX(timestamp_s) as last FROM events"
+            )
             time_range = cur.fetchone()
             return {
                 "total_events": sum(type_counts.values()),
@@ -207,8 +242,9 @@ class EventsStore:
                 "last_event": time_range["last"] if time_range else None,
             }
 
-    def delete_events(self, event_type: str | None = None,
-                      before_timestamp: float | None = None) -> int:
+    def delete_events(
+        self, event_type: str | None = None, before_timestamp: float | None = None
+    ) -> int:
         """Delete events matching filters. Returns count of deleted rows. Thread-safe."""
         conditions = []
         params: list[Any] = []
@@ -222,7 +258,7 @@ class EventsStore:
         with self._lock:
             cur = self.conn.cursor()
             # NOTE: `where` is constructed from controlled string literals only.
-            cur.execute("DELETE FROM events{w}".format(w=where), params)
+            cur.execute(f"DELETE FROM events{where}", params)
             deleted = cur.rowcount
             self.conn.commit()
             return deleted

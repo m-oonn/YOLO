@@ -1,4 +1,5 @@
 """Tests for FastAPI endpoints."""
+
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -17,7 +18,12 @@ def mock_store():
     with patch("backend.api.events.get_store") as mock_get_store:
         mock_instance = MagicMock()
         mock_instance.query_with_total.return_value = ([], 0)
-        mock_instance.get_stats.return_value = {"total_events": 0, "by_type": {}, "first_event": None, "last_event": None}
+        mock_instance.get_stats.return_value = {
+            "total_events": 0,
+            "by_type": {},
+            "first_event": None,
+            "last_event": None,
+        }
         mock_instance.count.return_value = 0
         mock_instance.delete_events.return_value = 5
         mock_instance.clear_all.return_value = 10
@@ -28,6 +34,7 @@ def mock_store():
 @pytest.fixture
 def client(mock_store):
     from backend.main import app
+
     with TestClient(app) as c:
         yield c
 
@@ -79,8 +86,10 @@ def test_detection_status_no_pipeline(client):
 
 
 def test_start_detection_already_active(client):
-    with patch("backend.api.detection._detection_active", True), \
-         patch("backend.api.detection._pipeline") as mock_pipeline:
+    with (
+        patch("backend.api.detection._detection_active", True),
+        patch("backend.api.detection._pipeline") as mock_pipeline,
+    ):
         mock_pipeline.running = True
         response = client.post("/api/detection/start", json={"source": "0"})
         assert response.status_code == 200

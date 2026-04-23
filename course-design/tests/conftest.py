@@ -31,7 +31,9 @@ def sample_config():
             fall=FallRule(enabled=True, upright_aspect_min=1.2, fallen_aspect_max=1.0),
             crowd=CrowdRule(enabled=True, min_people=3),
             intrusion=IntrusionRule(enabled=False),
-            fight=FightRule(enabled=True, distance_threshold=150, movement_threshold=30),
+            fight=FightRule(
+                enabled=True, distance_threshold=150, movement_threshold=30
+            ),
         ),
     )
 
