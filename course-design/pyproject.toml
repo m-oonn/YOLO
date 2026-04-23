@@ -1,0 +1,50 @@
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [".git", ".venv", "__pycache__", "dist", "*.pyc"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4"]
+ignore = ["E501", "B008", "UP007"]
+fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004", "E402"]
+"scripts/**/*.py" = ["E402", "F841"]
+"backend/main.py" = ["E501", "E402"]
+"backend/api/__init__.py" = ["E402"]
+"**/__init__.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+    "--cov=core",
+    "--cov=backend",
+    "--cov-report=term-missing",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=60",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring running services",
+]
+
+[tool.coverage.run]
+source = ["core", "backend"]
+omit = ["*/tests/*", "*/scripts/*", "backend/__init__.py", "backend/main.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+show_missing = true
