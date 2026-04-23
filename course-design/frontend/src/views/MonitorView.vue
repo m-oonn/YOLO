@@ -23,9 +23,9 @@
         <el-col :span="4">
           <el-button
             type="success"
-            @click="startDetection"
             :disabled="detectionRunning"
             :icon="VideoPlay"
+            @click="startDetection"
           >
             启动检测
           </el-button>
@@ -33,9 +33,9 @@
         <el-col :span="4">
           <el-button
             type="danger"
-            @click="stopDetection"
             :disabled="!detectionRunning"
             :icon="VideoPause"
+            @click="stopDetection"
           >
             停止
           </el-button>
@@ -48,7 +48,7 @@
             <span class="fps-text">FPS: {{ fps }}</span>
             <span class="stat-text">帧数: {{ frameCount }}</span>
             <span class="stat-text">事件: {{ eventCount }}</span>
-            <span class="stat-text" v-if="uploadedFile">{{ uploadedFile.name }}</span>
+            <span v-if="uploadedFile" class="stat-text">{{ uploadedFile.name }}</span>
           </div>
         </el-col>
       </el-row>
@@ -72,7 +72,7 @@
       </el-upload>
       <template #footer>
         <el-button @click="showUpload = false">取消</el-button>
-        <el-button type="primary" @click="confirmUpload" :loading="uploading">
+        <el-button type="primary" :loading="uploading" @click="confirmUpload">
           上传并启动检测
         </el-button>
       </template>
@@ -81,12 +81,7 @@
     <!-- Video Stream -->
     <el-card shadow="never" class="video-card">
       <div class="video-container">
-        <img
-          v-if="streamUrl"
-          :src="streamUrl"
-          alt="Detection Stream"
-          class="stream-image"
-        />
+        <img v-if="streamUrl" :src="streamUrl" alt="Detection Stream" class="stream-image" />
         <div v-else class="no-stream">
           <el-icon :size="48"><VideoCamera /></el-icon>
           <p>请选择检测源并启动检测</p>
@@ -213,11 +208,13 @@ const connectWebSocket = () => {
         frameCount.value = data.data.frame_count || 0
         eventCount.value = data.data.events?.total_events || eventCount.value
       }
-    } catch (e) {
+    } catch {
       // ignore non-JSON messages
     }
   }
-  ws.onerror = () => { /* will fall back to polling */ }
+  ws.onerror = () => {
+    /* will fall back to polling */
+  }
 }
 
 const disconnectWebSocket = () => {
@@ -259,7 +256,13 @@ const pollStatus = async () => {
 }
 
 const eventTypeColor = (type) => {
-  const colors = { running: 'warning', fall: 'danger', crowd: 'info', intrusion: 'danger', fight: 'danger' }
+  const colors = {
+    running: 'warning',
+    fall: 'danger',
+    crowd: 'info',
+    intrusion: 'danger',
+    fight: 'danger',
+  }
   return colors[type] || 'info'
 }
 
@@ -286,12 +289,31 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.monitor-container { display: flex; flex-direction: column; gap: 16px; }
-.control-card { flex-shrink: 0; }
-.status-bar { display: flex; align-items: center; gap: 16px; }
-.fps-text { color: #409eff; font-weight: 600; font-size: 14px; }
-.stat-text { color: #666; font-size: 13px; }
-.video-card { flex: 1; }
+.monitor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.control-card {
+  flex-shrink: 0;
+}
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.fps-text {
+  color: #409eff;
+  font-weight: 600;
+  font-size: 14px;
+}
+.stat-text {
+  color: #666;
+  font-size: 13px;
+}
+.video-card {
+  flex: 1;
+}
 .video-container {
   width: 100%;
   aspect-ratio: 16/9;
@@ -302,11 +324,35 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
 }
-.stream-image { width: 100%; height: 100%; object-fit: contain; }
-.no-stream { text-align: center; color: #999; }
-.no-stream p { margin-top: 8px; font-size: 14px; }
-.events-card { flex-shrink: 0; }
-.events-header { display: flex; justify-content: space-between; align-items: center; }
-.upload-text { margin-top: 8px; font-size: 14px; color: #666; }
-.upload-tip { font-size: 12px; color: #999; margin-top: 4px; }
+.stream-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.no-stream {
+  text-align: center;
+  color: #999;
+}
+.no-stream p {
+  margin-top: 8px;
+  font-size: 14px;
+}
+.events-card {
+  flex-shrink: 0;
+}
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.upload-text {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #666;
+}
+.upload-tip {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
 </style>

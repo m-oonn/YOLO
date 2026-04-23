@@ -17,10 +17,24 @@ export default [
   },
   {
     rules: {
-      'vue/multi-word-component-names': ['error', { ignores: ['index', 'default'] }],
+      'vue/multi-word-component-names': [
+        'error',
+        {
+          ignores: [
+            'index',
+            'default',
+            'Monitor',
+            'List',
+            'Setting',
+            'VideoPlay',
+            'VideoPause',
+            'VideoCamera',
+          ],
+        },
+      ],
       'vue/no-v-html': 'warn',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
   prettierConfig,
