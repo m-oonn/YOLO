@@ -7,30 +7,24 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sqlite3
 import threading
-from contextlib import suppress
 from typing import Any
 
+from core.constants import EVENT_FLUSH_BATCH, VACUUM_EVENT_COUNT
+
+from .constants import DEFAULT_PRIORITY, EVENT_PRIORITIES
+from .db_base import SQLiteBase
 from .rules import Event
 
 logger = logging.getLogger(__name__)
 
 
-class EventsStore:
+class EventsStore(SQLiteBase):
     """Stores detection events in SQLite with indexing for efficient querying."""
 
     def __init__(self, db_path: str):
-        os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-        self.db_path = db_path
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        # Enable WAL mode for better concurrent read/write performance
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        # Reduce fsync calls for better throughput
-        self.conn.execute("PRAGMA synchronous=NORMAL")
-        self._lock = threading.Lock()
+        super().__init__(db_path)
         self._vacuum_counter = 0
         self._create_schema()
 
@@ -48,9 +42,19 @@ class EventsStore:
                 bbox_json TEXT,
                 snapshot_path TEXT,
                 extra_json TEXT,
-                description TEXT
+                description TEXT,
+                keypoints_json TEXT,
+                skeleton_count INTEGER DEFAULT 0,
+                priority TEXT DEFAULT 'INFO',
+                source TEXT
             );
         """)
+        # Ensure all required columns exist (for databases created before schema updates)
+        self.ensure_column_exists(cur, "events", "keypoints_json", "TEXT")
+        self.ensure_column_exists(cur, "events", "skeleton_count", "INTEGER DEFAULT 0")
+        self.ensure_column_exists(cur, "events", "priority", "TEXT DEFAULT 'INFO'")
+        self.ensure_column_exists(cur, "events", "source", "TEXT")
+        
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_s);"
         )
@@ -71,11 +75,17 @@ class EventsStore:
                 for event, snapshot_path in events_with_paths:
                     bbox_json = json.dumps(event.bbox) if event.bbox else None
                     extra_json = json.dumps(event.extra or {})
+                    keypoints_json = None
+                    if event.extra and "skeleton_kps" in event.extra:
+                        keypoints_json = json.dumps(event.extra.get("skeleton_kps"))
+                    skel_count = 1 if keypoints_json else 0
+                    priority = EVENT_PRIORITIES.get(event.event_type, DEFAULT_PRIORITY)
                     cur.execute(
                         """INSERT INTO events
                            (event_type, timestamp_s, frame_index, track_id, zone_name,
-                            confidence, bbox_json, snapshot_path, extra_json, description)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            confidence, bbox_json, snapshot_path, extra_json, description,
+                            keypoints_json, skeleton_count, priority, source)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             event.event_type,
                             event.timestamp_s,
@@ -87,56 +97,44 @@ class EventsStore:
                             snapshot_path,
                             extra_json,
                             event.description,
+                            keypoints_json,
+                            skel_count,
+                            priority,
+                            event.source,
                         ),
                     )
                     success += 1
                 self.conn.commit()
                 self._vacuum_counter += success
-                if self._vacuum_counter >= 1000:
+                if self._vacuum_counter >= VACUUM_EVENT_COUNT:
                     self._vacuum_counter = 0
-                    self.conn.execute("VACUUM")
-                    logger.debug("Database VACUUM completed")
+                    # VACUUM 是重量级操作（重建整个数据库），放在后台线程执行
+                    # 避免阻塞检测线程的热路径
+                    threading.Thread(
+                        target=self._do_vacuum,
+                        daemon=True,
+                        name="DB-VACUUM",
+                    ).start()
             return success
         except sqlite3.Error:
             logger.exception("Database error recording event batch")
             return success
 
-    def record(self, event: Event, snapshot_path: str | None = None) -> bool:
-        """Store a single event. Thread-safe via internal lock. Returns True on success."""
+    def _do_vacuum(self) -> None:
+        """Run VACUUM in a background thread to avoid blocking the detection hot path."""
         try:
-            bbox_json = json.dumps(event.bbox) if event.bbox else None
-            extra_json = json.dumps(event.extra or {})
-            with self._lock:
-                cur = self.conn.cursor()
-                cur.execute(
-                    """INSERT INTO events
-                       (event_type, timestamp_s, frame_index, track_id, zone_name,
-                        confidence, bbox_json, snapshot_path, extra_json, description)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        event.event_type,
-                        event.timestamp_s,
-                        event.frame_index,
-                        event.track_id,
-                        event.zone_name,
-                        event.confidence,
-                        bbox_json,
-                        snapshot_path,
-                        extra_json,
-                        event.description,
-                    ),
-                )
-                self.conn.commit()
-                # Periodic VACUUM to prevent unbounded DB growth
-                self._vacuum_counter += 1
-                if self._vacuum_counter >= 1000:
-                    self._vacuum_counter = 0
-                    self.conn.execute("VACUUM")
-                    logger.debug("Database VACUUM completed")
-            return True
-        except sqlite3.Error:
-            logger.exception("Database error recording event")
-            return False
+            conn = sqlite3.connect(self.db_path)
+            try:
+                conn.execute("VACUUM")
+                logger.debug("Database VACUUM completed (background)")
+            finally:
+                conn.close()
+        except Exception:
+            logger.warning("Background VACUUM failed (non-critical)", exc_info=True)
+
+    def record(self, event: Event, snapshot_path: str | None = None) -> bool:
+        """Store a single event. Delegates to record_batch()."""
+        return self.record_batch([(event, snapshot_path)]) > 0
 
     def _build_where(self, event_type, start_time, end_time):
         """Build WHERE clause and params from filters."""
@@ -167,8 +165,13 @@ class EventsStore:
                 d["extra"] = json.loads(d["extra_json"])
             else:
                 d["extra"] = {}
+            if d["keypoints_json"]:
+                d["keypoints"] = json.loads(d["keypoints_json"])
+            else:
+                d["keypoints"] = None
             del d["bbox_json"]
             del d["extra_json"]
+            del d["keypoints_json"]
             results.append(d)
         return results
 
@@ -272,5 +275,4 @@ class EventsStore:
         return self.delete_events()
 
     def close(self) -> None:
-        with suppress(Exception):
-            self.conn.close()
+        super().close()

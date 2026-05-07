@@ -32,7 +32,35 @@
 
 ## 快速开始
 
-### 方式一：直接运行
+### ⭐ 推荐方式：一键启动（最简单）
+
+**Windows:**
+```bash
+双击 start.bat
+```
+
+**macOS/Linux:**
+```bash
+./start.sh
+```
+
+一键启动会自动：
+- ✅ 检查系统环境（Python版本、依赖、端口、GPU）
+- ✅ 安装前端依赖（如需要）
+- ✅ 启动后端 API 服务
+- ✅ 启动前端界面
+- ✅ 等待服务就绪
+- ✅ 自动打开浏览器
+
+可用选项：
+```bash
+./start.sh --backend-only    # 只启动后端
+./start.sh --port 9000      # 自定义端口
+./start.sh --no-browser      # 不打开浏览器
+./start.sh --skip-checks     # 跳过系统检查
+```
+
+### 方式二：手动运行
 
 ```bash
 # 1. 安装依赖
@@ -51,13 +79,13 @@ npm install
 npm run dev
 ```
 
-### 方式二：Docker 部署
+### 方式三：Docker 部署
 
 ```bash
 docker-compose up
 ```
 
-### 方式三：命令行检测
+### 方式四：命令行检测
 
 ```bash
 # 摄像头检测

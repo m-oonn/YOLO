@@ -1,3 +1,6 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
 """Tests for FastAPI endpoints."""
 
 import os
@@ -89,23 +92,50 @@ def test_detection_status_no_pipeline(client):
 
 
 def test_start_detection_already_active(client):
-    with (
-        patch("backend.api.detection._detection_active", True),
-        patch("backend.api.detection._pipeline") as mock_pipeline,
-    ):
-        mock_pipeline.running = True
+    from backend.detection_manager import detection_manager
+    from unittest.mock import MagicMock
+
+    fake_thread = MagicMock()
+    fake_thread.is_alive.return_value = True
+    fake_thread.name = "FakeDetectionThread"
+
+    detection_manager._detection_active = True
+    detection_manager._pipeline_thread = fake_thread
+
+    try:
         response = client.post("/api/detection/start", json={"source": "0"})
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "error"
+        # 旧线程卡住时不再返回错误，而是强制启动新检测
+        assert data["status"] == "started"
+    finally:
+        detection_manager._detection_active = False
+        detection_manager._pipeline_thread = None
+
+
+def test_start_detection_stale_state_auto_recovers(client):
+    from backend.detection_manager import detection_manager
+
+    detection_manager._detection_active = True
+    detection_manager._pipeline_thread = None
+
+    try:
+        response = client.post("/api/detection/start", json={"source": "0"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "started"
+    finally:
+        detection_manager._detection_active = False
 
 
 def test_stop_detection_no_active(client):
-    with patch("backend.api.detection._detection_active", False):
+    from backend.detection_manager import detection_manager
+
+    with patch.object(detection_manager, "_detection_active", False):
         response = client.post("/api/detection/stop")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "error"
+        assert data["status"] == "stopped"
 
 
 def test_list_cameras(client):

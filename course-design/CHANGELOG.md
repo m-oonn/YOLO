@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the YOLO Detection System will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,42 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- CI/CD pipeline with GitHub Actions
-- Docker build and push workflow
-- ESLint 9 flat config for frontend
-- Prettier code formatting
-- Ruff linting for Python
-- Pre-commit hooks
-- Additional integration tests
-- `requirements-dev.txt` for development dependencies
-- `pyproject.toml` for project configuration
+- Security module (`backend/security.py`) with path traversal prevention
+- Authentication module (`backend/auth.py`) with API key support
+- Comprehensive monitoring endpoint (`/api/detection/monitoring`)
+- Locked dependencies (`requirements.lock.txt`)
 
 ### Changed
-- Frontend `package.json` scripts updated with lint and format commands
-- Test coverage threshold raised to 80%
+- Enhanced WebSocket to push status updates proactively
+- Frontend reduced polling frequency when WebSocket is connected
+- File upload validation now includes MIME type verification
 
-### Security
-- MIT License added
-- SECURITY.md policy document added
+### Fixed
+- Path traversal vulnerabilities in model management
+- File upload extension bypass vulnerabilities
 
 ## [1.0.0] - 2025-01-01
 
 ### Added
-- Real-time object detection using YOLOv8/v11
-- 5 behavior detection rules:
-  - Running detection
-  - Fall detection
-  - Crowd detection
-  - Intrusion detection
-  - Fight detection
-- ByteTrack multi-object tracking
-- FastAPI backend with REST API
-- Vue.js 3 frontend with Element Plus
-- SQLite event storage
-- MJPEG and WebSocket real-time streaming
-- Docker and docker-compose deployment
-- Unit tests for core modules
-- YAML-based configuration system
+- Real-time object detection with YOLOv12
+- Multi-object tracking with ByteTrack
+- Behavior detection rules (running, fall detection, crowd gathering, intrusion, fighting)
+- MLLM-powered scene understanding and alarm enhancement
+- REST API with FastAPI
+- Web-based monitoring dashboard
+- Event storage and retrieval
+- GPU acceleration support
 
-[unreleased]: https://github.com/m-oonn/YOLO/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/m-oonn/YOLO/releases/tag/v1.0.0
+[Unreleased]: https://github.com/yolo-course/design/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/yolo-course/design/releases/tag/v1.0.0

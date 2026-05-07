@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -14,6 +15,9 @@ from fastapi.responses import FileResponse
 from backend.store import get_store
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_SNAPSHOT_DIR = Path("outputs").resolve()
+
 router = APIRouter()
 
 
@@ -101,6 +105,10 @@ def event_snapshot(event_id: int):
     if not row or not row["snapshot_path"]:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     path = row["snapshot_path"]
-    if not os.path.exists(path):
+    resolved = Path(path).resolve()
+    if not str(resolved).startswith(str(ALLOWED_SNAPSHOT_DIR)):
+        logger.warning("Snapshot path traversal attempt: %s", path)
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not resolved.exists():
         raise HTTPException(status_code=404, detail="Snapshot file not found on disk")
-    return FileResponse(path, media_type="image/jpeg")
+    return FileResponse(str(resolved), media_type="image/jpeg")

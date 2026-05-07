@@ -1,51 +1,53 @@
-# Default configuration for YOLO Course Design Project
-# See docs/CONFIG.md for detailed documentation
-
-model:
-  path: "models/yolov8n.pt"   # YOLO model path (supports .pt, .onnx, .engine)
-  imgsz: 640                    # Input image size
-  conf: 0.35                    # Confidence threshold
-  iou: 0.5                      # NMS IoU threshold
-  device: "auto"                # auto/cpu/cuda:0
-
+alarm:
+  cooldown_s: 30.0
+  enabled: true
+  sound_enabled: true
 camera:
-  fps: 30                       # Camera capture FPS
-
-rules:
-  running:
-    enabled: true
-    speed_px_s: 50              # Speed threshold (px/s)
-    min_duration_s: 0.3         # Minimum duration to confirm
-    debounce_s: 5.0             # Cooldown between repeat events
-
-  fall:
-    enabled: true
-    upright_aspect_min: 1.2     # Min aspect ratio (h/w) for upright person
-    fallen_aspect_max: 1.0      # Max aspect ratio for fallen person
-    transition_window_s: 1.0    # Time window for transition detection
-    debounce_s: 5.0             # Cooldown between repeat events
-
-  crowd:
-    enabled: true
-    min_people: 3               # Minimum people to trigger crowd alert
-    proximity_px: 200           # Max distance between clustered people
-    debounce_s: 10.0            # Cooldown between repeat events
-
-  intrusion:
-    enabled: true
-    debounce_s: 5.0             # Cooldown between repeat events
-    zones:
-      - name: "lab"
-        polygon: [[60,60],[580,60],[580,340],[60,340]]
-
-  fight:
-    enabled: true
-    distance_threshold: 150     # Max distance between two persons (px)
-    movement_threshold: 30      # Min movement speed (px/s)
-    min_duration_s: 0.5         # Duration to confirm fight
-    debounce_s: 5.0             # Cooldown between repeat events
-
+  buffer_size: 30
+  fps: 30
+  url: ''
+mllm:
+  alarm_enhance_enabled: true
+  enabled: true
+  enhancement_cooldown_s: 10.0
+  inference_backend: auto
+  key_frame_interval: 15
+  max_new_tokens: 256
+  model_path: models/mllm/qwen2-vl-2b
+  model_type: qwen2-vl-2b
+  scene_description_enabled: true
+  shadow_mode: true
+model:
+  classes: null
+  conf: 0.35
+  device: cuda
+  imgsz: 640
+  inference_scale: 1.0
+  iou: 0.5
+  jpeg_quality: 80
+  path: models/yolo12m.pt
+  process_interval: 2
 output:
-  directory: "outputs"
+  directory: outputs
   save_snapshots: true
   view: true
+pose:
+  enabled: true
+  kp_threshold: 0.5
+  max_skeletons: 50
+  process_interval: 2
+  smoothing_alpha: 0.3
+rules:
+  crowd: true
+  fall: true
+  fight:
+    debounce_s: 5.0
+    distance_threshold: 150
+    enabled: true
+    min_duration_s: 0.5
+    movement_threshold: 30
+  intrusion:
+    debounce_s: 5.0
+    enabled: true
+    zones: []
+  run: true

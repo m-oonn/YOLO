@@ -1,7 +1,16 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
 # SPDX-License-Identifier: MIT
 
-"""Shared EventsStore singleton for cross-module access."""
+"""Shared EventsStore singleton for cross-module access.
+
+Provides a process-wide EventsStore instance that is lazily initialised
+on first access and reused for the lifetime of the application.  All API
+routers and the detection pipeline share the same store so that events
+written by the pipeline are immediately visible to the API layer.
+
+Functions:
+    get_store: Return the singleton EventsStore (creates it on first call).
+"""
 
 from __future__ import annotations
 

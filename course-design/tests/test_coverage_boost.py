@@ -71,7 +71,7 @@ class TestConfig:
         from core.config import load_config
 
         cfg = load_config()
-        assert "yolov" in cfg.model_path
+        assert ".pt" in cfg.model_path or ".onnx" in cfg.model_path
         assert cfg.conf == 0.35
         assert cfg.camera_fps == 30
         assert cfg.rules.running.enabled is True

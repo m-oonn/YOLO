@@ -8,31 +8,56 @@ from __future__ import annotations
 import os
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file before any os.environ reads
+
 COURSE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if COURSE_DIR not in sys.path:
     sys.path.insert(0, COURSE_DIR)
 
 import logging
-import time
+import time as _time
+
+_boot_ts = _time.perf_counter()
+
+from .exceptions import YOLOException
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from .api import cameras, detection, events
-from .store import close_store
+_t0 = _time.perf_counter()
+from .api import cameras, detection, events  # noqa: E402
+_t1 = _time.perf_counter()
+
+from .api.alarms import router as alarms_router  # noqa: E402
+from .api.archives import router as archives_router  # noqa: E402
+from .api.mllm import router as mllm_router  # noqa: E402
+from .limiter import app_limiter  # noqa: E402
+from .logging_utils import clear_request_id, generate_request_id, setup_logging  # noqa: E402
+from .store import close_store  # noqa: E402
+_t2 = _time.perf_counter()
+
+limiter = app_limiter
 
 os.makedirs("outputs", exist_ok=True)
-logging.basicConfig(
+
+setup_logging(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join("outputs", "app.log")),
-    ],
+    log_file=os.path.join("outputs", "app.log"),
+    json_format=os.environ.get("LOG_JSON", "0") == "1",
 )
 logger = logging.getLogger(__name__)
+
+_boot_elapsed = (_time.perf_counter() - _boot_ts) * 1000
+logger.info(
+    "Backend module import timing: api-cameras/detection/events=%.0fms, "
+    "remaining-routers=%.0fms, total=%.0fms",
+    (_t1 - _t0) * 1000, (_t2 - _t1) * 1000, _boot_elapsed,
+)
 
 
 ALLOWED_ORIGINS = [
@@ -46,9 +71,38 @@ ALLOWED_ORIGINS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting YOLO Course Design API")
+    if os.environ.get("YOLO_PREWARM", "0") == "1":
+        _prewarm_model()
     yield
     logger.info("Shutting down YOLO Course Design API")
+    try:
+        from backend.alarm_singleton import close_alarm_engine
+        close_alarm_engine()
+    except Exception:
+        pass
     close_store()
+
+
+def _prewarm_model():
+    """Pre-load YOLO model in background to warm CUDA JIT compiler cache.
+
+    Only invoked when YOLO_PREWARM=1 env var is set. The model load runs in
+    a daemon thread so it does not block uvicorn startup.
+    """
+    logger.info("Pre-warming YOLO model (background thread)...")
+    def _warm():
+        from core.config import load_config
+        from ultralytics import YOLO
+        try:
+            cfg = load_config()
+            model = YOLO(cfg.model_path)
+            model.eval()
+            logger.info("Model pre-warm complete.")
+        except Exception as e:
+            logger.warning("Model pre-warm failed (non-fatal): %s", e)
+    import threading
+    t = threading.Thread(target=_warm, daemon=True)
+    t.start()
 
 
 app = FastAPI(
@@ -57,15 +111,53 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(YOLOException)
+async def yolo_exception_handler(request: Request, exc: YOLOException):
+    """Handler for YOLO application-specific exceptions."""
+    from .logging_utils import get_request_id
+
+    rid = get_request_id() or ""
+    logger.warning(
+        "[request_id=%s] YOLO exception: %s - %s at %s %s",
+        rid,
+        exc.code,
+        exc.message,
+        request.method,
+        request.url.path,
+    )
+    status_map = {
+        "PIPELINE_NOT_RUNNING": 400,
+        "PIPELINE_ALREADY_RUNNING": 409,
+        "MODEL_NOT_FOUND": 404,
+        "INVALID_SOURCE": 400,
+        "CONFIG_ERROR": 400,
+    }
+    status_code = status_map.get(exc.code, 500)
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": exc.__class__.__name__,
+            "code": exc.code,
+            "message": exc.message,
+            "details": exc.details,
+            "request_id": rid,
+        },
+    )
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors with structured error response."""
-    request_id = id(request)
+    from .logging_utils import get_request_id
+
+    rid = get_request_id() or ""
     logger.exception(
         "[request_id=%s] Unhandled exception: %s - %s at %s %s",
-        request_id,
+        rid,
         type(exc).__name__,
         exc,
         request.method,
@@ -75,8 +167,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={
             "detail": "Internal server error",
-            "type": type(exc).__name__,
-            "request_id": str(request_id),
+            "request_id": rid,
         },
     )
 
@@ -102,52 +193,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── API Key Authentication Middleware ──────────────────────────
-# Reads API_KEY from env. If set, all /api/* endpoints require
-# a matching X-API-Key header (or ?api_key= query param).
-# Public endpoints (health, docs, streams) are always accessible.
-_API_KEY = os.environ.get("API_KEY")
-_PUBLIC_PREFIXES = (
-    "/health",
-    "/",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
-    "/api/detection/stream.mjpg",
-    "/api/detection/stream",
-)
-
 
 @app.middleware("http")
-async def enforce_api_key(request: Request, call_next):
-    """Reject requests with invalid/missing API key when API_KEY is configured."""
-    if _API_KEY:
-        path = request.url.path
-        # Check if this is a public endpoint
-        is_public = any(path.startswith(p) for p in _PUBLIC_PREFIXES)
-        if not is_public:
-            provided = request.headers.get("X-API-Key") or request.query_params.get(
-                "api_key"
-            )
-            if not provided or provided != _API_KEY:
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={
-                        "detail": "Invalid or missing API key. "
-                        "Provide via X-API-Key header or ?api_key= query param.",
-                    },
-                    headers={"WWW-Authenticate": "APIKey"},
-                )
-    return await call_next(request)
+async def request_tracing_middleware(request: Request, call_next):
+    """Inject a request_id into every request for tracing."""
+    rid = request.headers.get("X-Request-ID") or generate_request_id()
+    from .logging_utils import set_request_id
+    set_request_id(rid)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
+    finally:
+        from .logging_utils import clear_request_id
+        clear_request_id()
 
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log request method, path, status code, client IP, and duration."""
-    start = time.time()
+    start = _time.time()
     client_ip = request.client.host if request.client else "unknown"
     response = await call_next(request)
-    duration_ms = (time.time() - start) * 1000
+    duration_ms = (_time.time() - start) * 1000
     log_kwargs = {
         "method": request.method,
         "path": request.url.path,
@@ -162,11 +230,20 @@ async def log_requests(request: Request, call_next):
     except Exception:
         pass
     if 400 <= response.status_code < 500:
-        logger.warning("Client error: %(method)s %(path)s -> %(status)d [%(client_ip)s] (%.2fms)", log_kwargs)
+        logger.warning(
+            "%(method)s %(path)s -> %(status)d [%(client_ip)s] (%(duration_ms).2fms)"
+            % log_kwargs
+        )
     elif response.status_code >= 500:
-        logger.error("Server error: %(method)s %(path)s -> %(status)d [%(client_ip)s] (%.2fms)", log_kwargs)
+        logger.error(
+            "%(method)s %(path)s -> %(status)d [%(client_ip)s] (%(duration_ms).2fms)"
+            % log_kwargs
+        )
     else:
-        logger.info("%(method)s %(path)s -> %(status)d [%(client_ip)s] (%.2fms)", log_kwargs)
+        logger.info(
+            "%(method)s %(path)s -> %(status)d [%(client_ip)s] (%(duration_ms).2fms)"
+            % log_kwargs
+        )
     return response
 
 
@@ -174,6 +251,9 @@ async def log_requests(request: Request, call_next):
 app.include_router(cameras.router, prefix="/api/cameras", tags=["Cameras"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(detection.router, prefix="/api/detection", tags=["Detection"])
+app.include_router(alarms_router, prefix="/api/alarms", tags=["Alarms"])
+app.include_router(archives_router, prefix="/api", tags=["Archives"])
+app.include_router(mllm_router, prefix="/api/mllm", tags=["MLLM"])
 
 
 @app.get("/")

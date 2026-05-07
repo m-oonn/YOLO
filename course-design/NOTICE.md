@@ -1,125 +1,55 @@
-# Third-Party Licenses
+# Third-Party Notices
 
-This project includes software from the following third-party sources:
+This project includes or links to the following third-party software components:
 
-## Core Dependencies
+## Detection Framework
 
-### Ultralytics YOLO
-- **License**: AGPL-3.0
-- **Source**: https://github.com/ultralytics/ultralytics
-- **Usage**: Core object detection engine
-- **Note**: Ultralytics YOLO is licensed under AGPL-3.0. This license has copyleft provisions that may affect derivative works. Users should review the AGPL-3.0 license terms at https://www.gnu.org/licenses/agpl-3.0.html
+- **Ultralytics YOLO** - AGPL-3.0 License
+  - Repository: https://github.com/ultralytics/ultralytics
+  - License: https://github.com/ultralytics/ultralytics/blob/main/LICENSE
 
-### OpenCV (opencv-python)
-- **License**: BSD 3-Clause
-- **Source**: https://github.com/opencv/opencv-python
-- **Usage**: Image and video processing
+## YOLO Model Weights
 
-### NumPy
-- **License**: BSD 3-Clause
-- **Source**: https://github.com/numpy/numpy
-- **Usage**: Array operations and numerical computing
+- **YOLOv8/YOLOv11 Model Weights** - Ultralytics License
+  - The model weights (.pt files) are licensed by Ultralytics under their license agreement
+  - See: https://github.com/ultralytics/ultralytics/blob/main/ultralytics/utils_checks.py
 
-### PyTorch (torch)
-- **License**: BSD 3-Clause
-- **Source**: https://github.com/pytorch/pytorch
-- **Usage**: Deep learning framework for YOLO model inference
+## Python Dependencies
 
-## Backend Dependencies
+| Package | License | Copyright |
+|---------|---------|-----------|
+| ultralytics | AGPL-3.0 | Copyright (c) Ultralytics |
+| opencv-python | BSD-3-Clause | Copyright (c) OpenCV |
+| numpy | BSD-3-Clause | Copyright (c) NumPy Developers |
+| torch | BSD-3-Clause | Copyright (c) PyTorch Contributors |
+| fastapi | MIT | Copyright (c) Sebastián Ramírez |
+| uvicorn | BSD-3-Clause | Copyright (c) Tom Christie |
+| pydantic | MIT | Copyright (c) Samuel Colvin |
+| python-multipart | Apache-2.0 | Copyright (c) Adam Bogdan |
+| aiofiles | Apache-2.0 | Copyright (c) Tin Tvrtkovic |
+| pytest | MIT | Copyright (c) pytest-dev |
+| pytest-cov | MIT | Copyright (c) pytest-dev |
+| ruff | MIT | Copyright (c) Astral Software |
 
-### FastAPI
-- **License**: MIT
-- **Source**: https://github.com/tiangolo/fastapi
-- **Usage**: REST API framework
+## JavaScript Dependencies
 
-### Uvicorn
-- **License**: BSD 3-Clause
-- **Source**: https://github.com/encode/uvicorn
-- **Usage**: ASGI server
+| Package | License | Copyright |
+|---------|---------|-----------|
+| vue | MIT | Copyright (c) Evan You |
+| vue-router | MIT | Copyright (c) Evan You |
+| element-plus | MIT | Copyright (c) Element Plus Team |
+| axios | MIT | Copyright (c) Matt Zabriskie |
+| vite | MIT | Copyright (c) Vite Team |
+| @element-plus/icons-vue | MIT | Copyright (c) Element Plus Team |
 
-### Pydantic
-- **License**: MIT
-- **Source**: https://github.com/pydantic/pydantic
-- **Usage**: Data validation
+## Tracking Algorithm
 
-### python-dotenv
-- **License**: BSD 3-Clause
-- **Source**: https://github.com/theskumar/python-dotenv
-- **Usage**: Environment variable management
-
-### httpx
-- **License**: BSD 3-Clause
-- **Source**: https://github.com/encode/httpx
-- **Usage**: HTTP client
-
-## Frontend Dependencies
-
-### Vue.js
-- **License**: MIT
-- **Source**: https://github.com/vuejs/core
-- **Usage**: Frontend framework
-
-### Element Plus
-- **License**: MIT
-- **Source**: https://github.com/element-plus/element-plus
-- **Usage**: UI component library
-
-### Vue Router
-- **License**: MIT
-- **Source**: https://github.com/vuejs/router
-- **Usage**: Frontend routing
-
-### Axios
-- **License**: MIT
-- **Source**: https://github.com/axios/axios
-- **Usage**: HTTP client
-
-### Pinia
-- **License**: MIT
-- **Source**: https://github.com/vuejs/pinia
-- **Usage**: State management
-
-## Model Weights
-
-### YOLOv8 Model Files
-- **Source**: https://github.com/ultralytics/assets
-- **License**: AGPL-3.0 (inherits from Ultralytics YOLO)
-- **Note**: Model weights are provided by Ultralytics and are subject to their licensing terms
-
-## Development Tools
-
-### Ruff
-- **License**: MIT
-- **Source**: https://github.com/astral-sh/ruff
-- **Usage**: Python linting and formatting
-
-### ESLint
-- **License**: MIT
-- **Source**: https://github.com/eslint/eslint
-- **Usage**: JavaScript/Vue linting
-
-### Prettier
-- **License**: MIT
-- **Source**: https://github.com/prettier/prettier
-- **Usage**: Code formatting
-
-### pre-commit
-- **License**: MIT
-- **Source**: https://github.com/pre-commit/pre-commit
-- **Usage**: Git hooks framework
-
-### pytest
-- **License**: MIT
-- **Source**: https://github.com/pytest-dev/pytest
-- **Usage**: Python testing framework
-
-### pytest-cov
-- **License**: MIT
-- **Source**: https://github.com/pytest-dev/pytest-cov
-- **Usage**: Coverage reporting
+- **ByteTrack** - Apache-2.0 License
+  - Repository: https://github.com/ifzhang/ByteTrack
+  - Integrated via ultralytics library
 
 ---
 
-**Note**: This NOTICE file is provided for informational purposes. It does not modify the terms of the MIT License under which this project is distributed. Users are responsible for ensuring compliance with all applicable third-party licenses.
+This NOTICES file is provided for informational purposes only and does not constitute legal advice. Users of this software are responsible for ensuring compliance with all applicable licenses.
 
-**Last Updated**: 2026-04-23
+For questions about licensing, please refer to the individual project repositories or consult with a legal professional.

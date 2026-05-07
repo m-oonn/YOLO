@@ -119,12 +119,13 @@ def test_annotate_frame(config):
 
         pipeline = DetectionPipeline(config)
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame_copy = frame.copy()
         detections = [
             Detection(track_id=1, class_id=0, conf=0.9, x1=100, y1=100, x2=200, y2=300)
         ]
         annotated = pipeline.annotate_frame(frame, detections)
-        assert annotated.shape == frame.shape
-        assert not np.array_equal(annotated, frame)
+        assert annotated.shape == frame_copy.shape
+        assert not np.array_equal(annotated, frame_copy)
 
 
 def test_serialize_detections(config):

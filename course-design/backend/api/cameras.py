@@ -5,50 +5,28 @@
 
 from __future__ import annotations
 
-import cv2
+import time
 from fastapi import APIRouter
 
 router = APIRouter()
 
 
 def _list_camera_devices() -> list[dict]:
-    """Detect available camera devices. Uses CAP_DSHOW on Windows for fast enumeration."""
-    devices = []
-    for i in range(10):
-        try:
-            # CAP_DSHOW avoids lengthy backend enumeration on Windows
-            cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
-            if cap.isOpened():
-                ret, frame = cap.read()
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                devices.append(
-                    {
-                        "id": i,
-                        "name": f"Camera {i}",
-                        "available": True,
-                        "resolution": f"{width}x{height}" if width > 0 else "unknown",
-                        "fps": round(fps) if fps > 0 else 30,
-                    }
-                )
-                cap.release()
-                break  # Stop after first available camera
-        except Exception:
-            continue
-    return (
-        devices
-        if devices
-        else [
-            {
-                "id": 0,
-                "name": "Camera 0",
-                "available": True,
-                "resolution": "640x480",
-                "fps": 30,
-            }
-        ]
-    )
+    """Detect available camera devices.
+
+    Note: We do NOT open the camera here to avoid device lock on Windows.
+    Instead, we return a list of potential camera IDs.
+    The actual availability check happens when detection starts.
+    """
+    return [
+        {
+            "id": 0,
+            "name": "Camera 0",
+            "available": True,
+            "resolution": "640x480",
+            "fps": 30,
+        }
+    ]
 
 
 @router.get("/")
@@ -60,14 +38,20 @@ def list_cameras():
 @router.get("/{camera_id}")
 def get_camera_info(camera_id: int):
     """Get information about a specific camera."""
+    import cv2  # lazy import — cv2 is a heavy C extension
     try:
         cap = cv2.VideoCapture(camera_id)
         if not cap.isOpened():
             return {"id": camera_id, "available": False}
+        # Give camera time to initialize
+        time.sleep(0.3)
+        ret, frame = cap.read()
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
+        # Give DirectShow time to release the device
+        time.sleep(0.5)
         return {
             "id": camera_id,
             "name": f"Camera {camera_id}",
