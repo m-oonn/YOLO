@@ -114,6 +114,24 @@ def test_running_detection_below_threshold():
 
 def test_fall_detection_triggers():
     cfg = _make_cfg(upright_aspect_min=1.2, fallen_aspect_max=1.0)
+    # Override defaults for rapid single-frame test
+    cfg = AppConfig(
+        model_path="dummy.pt",
+        rules=RulesConfig(
+            running=RunningRule(enabled=False),
+            fall=FallRule(
+                enabled=True,
+                upright_aspect_min=1.2,
+                fallen_aspect_max=1.0,
+                transition_window_s=1.0,
+                confirm_frames=1,
+                min_aspect_change_rate=0.0,
+            ),
+            crowd=CrowdRule(enabled=False),
+            intrusion=IntrusionRule(enabled=False),
+            fight=FightRule(enabled=False),
+        ),
+    )
     engine = RulesEngine(cfg, person_class_id=PERSON)
     t = 100.0
 
@@ -143,14 +161,24 @@ def test_fall_no_false_positive():
 
 
 def test_crowd_detection_triggers():
-    cfg = _make_cfg(min_people=3)
+    cfg = AppConfig(
+        model_path="dummy.pt",
+        rules=RulesConfig(
+            running=RunningRule(enabled=False),
+            fall=FallRule(enabled=False),
+            crowd=CrowdRule(enabled=True, min_people=3, min_duration_s=0.0),
+            intrusion=IntrusionRule(enabled=False),
+            fight=FightRule(enabled=False),
+        ),
+    )
     engine = RulesEngine(cfg, person_class_id=PERSON)
 
     dets = [
-        _person(1, 0, 0, 10, 20),
-        _person(2, 50, 50, 60, 70),
-        _person(3, 100, 100, 110, 120),
+        _person(1, 0, 0, 50, 200),
+        _person(2, 40, 40, 90, 240),
+        _person(3, 80, 80, 130, 280),
     ]
+    # min_duration_s=0 → triggers on first frame where cluster is found
     events = engine.update(dets, 1, 100.0)
     assert len(events) == 1
     assert events[0].event_type == "crowd"
@@ -161,9 +189,9 @@ def test_crowd_below_threshold():
     engine = RulesEngine(cfg, person_class_id=PERSON)
 
     dets = [
-        _person(1, 0, 0, 10, 20),
-        _person(2, 50, 50, 60, 70),
-        _person(3, 100, 100, 110, 120),
+        _person(1, 0, 0, 50, 200),
+        _person(2, 40, 40, 90, 240),
+        _person(3, 80, 80, 130, 280),
     ]
     events = engine.update(dets, 1, 100.0)
     assert len(events) == 0
@@ -193,8 +221,11 @@ def test_intrusion_detection_triggers():
     )
     engine = RulesEngine(cfg, person_class_id=PERSON)
 
-    dets = [_person(1, 45, 45, 55, 55)]  # Center of zone
-    events = engine.update(dets, 1, 100.0)
+    # Frame 1: person enters zone (starts duration clock)
+    engine.update([_person(1, 45, 45, 55, 55)], 1, 100.0)
+    # Frame 2: still inside, duration met → event fires
+    dets = [_person(1, 45, 45, 55, 55)]
+    events = engine.update(dets, 2, 101.0)
     assert len(events) == 1
     assert events[0].event_type == "intrusion"
     assert events[0].zone_name == "restricted"
@@ -231,8 +262,23 @@ def test_intrusion_outside_zone():
 
 
 def test_fight_detection_triggers():
-    cfg = _make_cfg(
-        distance_threshold=150, movement_threshold=30, fight_min_duration_s=0.0
+    cfg = AppConfig(
+        model_path="dummy.pt",
+        rules=RulesConfig(
+            running=RunningRule(enabled=False),
+            fall=FallRule(enabled=False),
+            crowd=CrowdRule(enabled=False),
+            intrusion=IntrusionRule(enabled=False),
+            fight=FightRule(
+                enabled=True,
+                distance_threshold=150,
+                movement_threshold=30,
+                iou_threshold=0.0,
+                chaos_threshold=0.0,
+                required_score=3,
+                min_duration_s=0.0,
+            ),
+        ),
     )
     engine = RulesEngine(cfg, person_class_id=PERSON)
     t = 100.0
@@ -249,7 +295,7 @@ def test_fight_detection_triggers():
     events = engine.update([p1_moved, p2_still], 2, t + 0.01)
     assert len(events) == 0  # Timer started
 
-    # Frame 3: both still close, one still moving -> emit (may also trigger running)
+    # Frame 3: both still close, one still moving -> emit
     p1_moved_more = _person(1, 100, 100, 110, 120)
     events = engine.update([p1_moved_more, p2_still], 3, t + 0.02)
     fight_events = [e for e in events if e.event_type == "fight"]

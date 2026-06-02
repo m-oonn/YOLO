@@ -1,9 +1,9 @@
 /**
  * Copyright (c) 2025 YOLO Course Design Contributors
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Timer, Warning, User, Location, Lightning } from '@element-plus/icons-vue'
+import { Timer, Warning, User, Location, Lightning, Van } from '@element-plus/icons-vue'
 
 /**
  * Mapping of event types to Element Plus tag colors.
@@ -17,6 +17,7 @@ export function eventTypeColor(type) {
     crowd: 'info',
     intrusion: 'danger',
     fight: 'danger',
+    vehicle_intrusion: 'warning',
   }
   return colors[type] || 'info'
 }
@@ -33,6 +34,7 @@ export function statColor(type) {
     crowd: '#909399',
     intrusion: '#f56c6c',
     fight: '#f56c6c',
+    vehicle_intrusion: '#e6a23c',
   }
   return colors[type] || '#409eff'
 }
@@ -49,6 +51,7 @@ export function statIcon(type) {
     crowd: User,
     intrusion: Location,
     fight: Lightning,
+    vehicle_intrusion: Van,
   }
   return icons[type] || Warning
 }
@@ -132,6 +135,7 @@ export function eventTypeLabel(type) {
     crowd: '人群聚集',
     intrusion: '区域入侵',
     fight: '打架斗殴',
+    vehicle_intrusion: '车辆入侵',
   }
   return labels[type] || type
 }

@@ -6,8 +6,10 @@ import ElementPlus from 'unplugin-element-plus/vite'
 import viteCompression from 'vite-plugin-compression'
 
 const isProduction = process.env.NODE_ENV === 'production'
+const BASE = process.env.VITE_BASE || '/'
 
 export default defineConfig({
+  base: BASE,
   plugins: [
     vue(),
     Components({

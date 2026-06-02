@@ -75,7 +75,7 @@ output:
     assert cfg.imgsz == 320
     assert cfg.conf == 0.5
     assert cfg.iou == 0.4
-    assert cfg.device == "cuda:0"
+    assert cfg.device == "auto"  # device is read from model section, not top-level
     assert cfg.camera_fps == 15
     assert cfg.output_dir == "custom_outputs"
     assert cfg.save_snapshots is False
@@ -103,7 +103,7 @@ output:
     cfg = load_config(path)
     assert cfg.model_path == "models/yolov11x.pt"
     assert cfg.imgsz == 640
-    assert cfg.conf == 0.35
+    assert cfg.conf == 0.25
     os.unlink(path)
 
 
@@ -128,7 +128,7 @@ def test_snapshots_dir_property():
 def test_config_crowd_proximity_default():
     """CrowdRule should have a default proximity_px."""
     cfg = AppConfig()
-    assert cfg.rules.crowd.proximity_px == 200.0
+    assert cfg.rules.crowd.proximity_px == 180.0
 
 
 def test_config_debounce_defaults():
@@ -136,6 +136,6 @@ def test_config_debounce_defaults():
     cfg = AppConfig()
     assert cfg.rules.running.debounce_s == 5.0
     assert cfg.rules.fall.debounce_s == 5.0
-    assert cfg.rules.crowd.debounce_s == 10.0
+    assert cfg.rules.crowd.debounce_s == 8.0
     assert cfg.rules.intrusion.debounce_s == 5.0
     assert cfg.rules.fight.debounce_s == 5.0

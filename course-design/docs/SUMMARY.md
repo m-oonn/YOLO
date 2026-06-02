@@ -14,9 +14,11 @@
 
 ### 2. 行为分析规则引擎
 - 基于目标轨迹的行为检测算法
-- 5 种安全场景检测：奔跑、摔倒、人群、入侵、打架
+- 6 种安全场景检测：奔跑、摔倒、人群、入侵、打架、车辆入侵
+- 双引擎（BBox 规则 + 骨架多信号融合）+ 次级模型 + LSTM 序列分类
 - 独立可配置的检测参数
 - 防重复触发机制（debounce）
+- BoT-SORT / ByteTrack 双跟踪器可切换
 
 ### 3. 后端架构（FastAPI）
 - RESTful API 设计
@@ -26,9 +28,10 @@
 
 ### 4. 前端架构（Vue.js 3）
 - 响应式 SPA 设计
-- Element Plus 组件库
-- 实时监控仪表板
-- 事件查询与统计
+- Element Plus 组件库 + 深色主题
+- 实时监控仪表板（5 页面）
+- 事件查询与统计 + 文本特征搜索
+- CLIP 跨模态图像检索
 
 ### 5. DevOps
 - Docker 容器化部署
@@ -52,12 +55,15 @@
 
 | 项目计划要求 | 实现情况 |
 |-------------|---------|
-| YOLO 目标检测 | ✅ YOLOv11x, 80类 COCO |
-| 多目标跟踪 | ✅ ByteTrack 集成 |
-| 行为检测（奔跑/摔倒/人群/入侵/打架） | ✅ 5种规则引擎 |
-| 实时监控 | ✅ Vue.js 前端仪表板 |
-| 事件存储与检索 | ✅ SQLite + REST API |
+| YOLO 目标检测 | ✅ YOLOv12s, 80类 COCO |
+| 多目标跟踪 | ✅ ByteTrack + BoT-SORT 双跟踪器 |
+| 行为检测（奔跑/摔倒/人群/入侵/打架） | ✅ 6种规则引擎（含车辆入侵） |
+| 车辆检测 | ✅ COCO 5类车辆 + 入侵告警 |
+| 实时监控 | ✅ Vue.js 前端仪表板（深色主题） |
+| 事件存储与检索 | ✅ SQLite + REST API + CLIP 特征检索 |
+| MLLM 场景描述 | ✅ Qwen2-VL-2B / SmolVLM / Florence-2 |
 | REST API | ✅ FastAPI + Swagger |
+| TensorRT 部署 | ✅ pt→onnx→engine 流水线 + Jetson |
 | Docker 部署 | ✅ Docker + docker-compose |
 | RAG 知识库 | ⏳ 可扩展（预留接口） |
 | AI Agent | ⏳ 可扩展 |

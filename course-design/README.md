@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/m-oonn/YOLO/actions/workflows/ci.yml/badge.svg)](https://github.com/m-oonn/YOLO/actions)
 [![codecov](https://codecov.io/gh/m-oonn/YOLO/branch/main/graph/badge.svg)](https://codecov.io/gh/m-oonn/YOLO)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.4+-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -161,7 +161,7 @@ course-design/
 
 ## 许可证
 
-本项目采用 [MIT 许可证](LICENSE)。
+本项目采用 [Apache License 2.0](LICENSE)。
 
 ### 第三方依赖许可证声明
 

@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Constants and helper functions for detection."""
 
@@ -97,9 +97,11 @@ COCO_CLASSES: list[str] = [
     "toothbrush",
 ]
 
-EVENT_TYPES: list[str] = ["running", "fall", "crowd", "intrusion", "fight"]
+EVENT_TYPES: list[str] = ["running", "fall", "crowd", "intrusion", "fight", "vehicle_intrusion"]
 
 PERSON_CLASS_ID: int = 0
+
+VEHICLE_CLASS_IDS: list[int] = [1, 2, 3, 5, 7]  # bicycle, car, motorcycle, bus, truck
 
 # COCO 17-keypoint skeleton definition
 SKELETON_KEYPOINTS: list[str] = [
@@ -140,6 +142,7 @@ EVENT_PRIORITIES: dict[str, str] = {
     "intrusion": "WARNING",
     "crowd": "WARNING",
     "running": "INFO",
+    "vehicle_intrusion": "WARNING",
 }
 
 DEFAULT_PRIORITY: str = "INFO"

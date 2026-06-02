@@ -1,0 +1,45 @@
+# Copyright (c) 2025 YOLO Course Design Contributors
+# SPDX-License-Identifier: MIT
+
+"""
+Locked dependency versions for reproducible builds.
+This file pins exact versions of all dependencies.
+Run `pip-compile` to regenerate from requirements.txt
+when dependencies need to be updated.
+
+Usage:
+    pip install -r requirements.lock.txt  # For production
+    pip install -r requirements.txt      # For development
+"""
+
+# Core dependencies - pinned versions for production
+ultralytics==8.4.0
+opencv-python==4.10.0.84
+numpy==1.26.4
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
+
+# API - pinned versions
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+websockets==14.1
+python-multipart==0.0.20
+
+# Utilities - pinned versions
+pyyaml==6.0.2
+pydantic==2.10.4
+filetype==1.2.0
+slowapi==0.1.9
+psutil==6.1.1
+
+# MLLM / VLM Scene Understanding
+transformers==4.48.0
+accelerate==1.2.1
+tokenizers==0.21.0
+safetensors==0.5.2
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0

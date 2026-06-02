@@ -1,0 +1,61 @@
+# ============================================================
+# YOLO Campus Safety Detection System - Git Ignore Rules
+# ============================================================
+
+# --- Portable Dependencies (large, NOT tracked) ---
+nodejs/
+node-v*.zip
+*.zip
+*.tar.gz
+*.7z
+
+# --- Model Files (large binaries) ---
+models/
+*.pt
+*.engine
+*.onnx
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
+.env
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+frontend/dist/
+
+# --- Test & Coverage ---
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+# --- Outputs / Uploads ---
+outputs/
+uploads/
+.uploads/
+events.db
+*.mp4
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Transient / Debug ---
+agent-browser.json
+
+# --- Logs ---
+*.log

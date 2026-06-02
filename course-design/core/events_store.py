@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Event storage using SQLite for persistence and querying."""
 
@@ -46,7 +46,8 @@ class EventsStore(SQLiteBase):
                 keypoints_json TEXT,
                 skeleton_count INTEGER DEFAULT 0,
                 priority TEXT DEFAULT 'INFO',
-                source TEXT
+                source TEXT,
+                feature_blob BLOB
             );
         """)
         # Ensure all required columns exist (for databases created before schema updates)
@@ -54,6 +55,7 @@ class EventsStore(SQLiteBase):
         self.ensure_column_exists(cur, "events", "skeleton_count", "INTEGER DEFAULT 0")
         self.ensure_column_exists(cur, "events", "priority", "TEXT DEFAULT 'INFO'")
         self.ensure_column_exists(cur, "events", "source", "TEXT")
+        self.ensure_column_exists(cur, "events", "feature_blob", "BLOB")
         
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_s);"
@@ -121,22 +123,22 @@ class EventsStore(SQLiteBase):
             return success
 
     def _do_vacuum(self) -> None:
-        """Run VACUUM in a background thread to avoid blocking the detection hot path."""
+        """Run incremental_vacuum in background — non-blocking, unlike VACUUM."""
         try:
             conn = sqlite3.connect(self.db_path)
             try:
-                conn.execute("VACUUM")
-                logger.debug("Database VACUUM completed (background)")
+                conn.execute("PRAGMA incremental_vacuum(100)")
+                logger.debug("Database incremental_vacuum completed (background)")
             finally:
                 conn.close()
         except Exception:
-            logger.warning("Background VACUUM failed (non-critical)", exc_info=True)
+            logger.debug("Background incremental_vacuum skipped (non-critical)")
 
     def record(self, event: Event, snapshot_path: str | None = None) -> bool:
         """Store a single event. Delegates to record_batch()."""
         return self.record_batch([(event, snapshot_path)]) > 0
 
-    def _build_where(self, event_type, start_time, end_time):
+    def _build_where(self, event_type, start_time, end_time, search_text=None):
         """Build WHERE clause and params from filters."""
         conditions = []
         params: list[Any] = []
@@ -149,6 +151,11 @@ class EventsStore(SQLiteBase):
         if end_time is not None:
             conditions.append("timestamp_s <= ?")
             params.append(end_time)
+        if search_text:
+            conditions.append(
+                "(description LIKE ? OR extra_json LIKE ? OR snapshot_path LIKE ?)")
+            like = f"%{search_text}%"
+            params.extend([like, like, like])
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
         return where, params
 
@@ -182,9 +189,10 @@ class EventsStore(SQLiteBase):
         offset: int = 0,
         start_time: float | None = None,
         end_time: float | None = None,
+        search_text: str | None = None,
     ) -> list[dict[str, Any]]:
         """Query events with optional filters. Thread-safe via internal lock."""
-        where, params = self._build_where(event_type, start_time, end_time)
+        where, params = self._build_where(event_type, start_time, end_time, search_text)
         with self._lock:
             cur = self.conn.cursor()
             # NOTE: `where` is constructed from controlled string literals only.
@@ -200,9 +208,10 @@ class EventsStore(SQLiteBase):
         offset: int = 0,
         start_time: float | None = None,
         end_time: float | None = None,
+        search_text: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Query events with total count in a single query using window function."""
-        where, params = self._build_where(event_type, start_time, end_time)
+        where, params = self._build_where(event_type, start_time, end_time, search_text)
         with self._lock:
             cur = self.conn.cursor()
             # NOTE: `where` is constructed from controlled string literals only.

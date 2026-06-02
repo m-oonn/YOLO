@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Detection API endpoints with MJPEG stream for real-time video.
 
@@ -17,8 +17,13 @@ import os
 import time
 from pathlib import Path
 
-import filetype
 import yaml
+
+# Optional filetype import for file upload validation
+try:
+    import filetype
+except ImportError:
+    filetype = None
 from fastapi import APIRouter, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -46,6 +51,14 @@ class HealthStatus(BaseModel):
     timestamp: float
     uptime_s: float
     components: dict[str, str]
+
+
+class ProgressResponse(BaseModel):
+    """Detection startup progress response model."""
+
+    step: str
+    message: str
+    percent: int
 
 
 def _get_component_health() -> dict[str, str]:
@@ -222,6 +235,16 @@ def stop_detection():
 def get_detection_status():
     """Get current detection status."""
     return detection_manager.get_status()
+
+
+@router.get("/progress", response_model=ProgressResponse)
+def get_detection_progress():
+    """Get current startup progress.
+
+    Returns step-by-step progress information for the detection startup process,
+    including model loading, camera opening, and warmup phases.
+    """
+    return detection_manager.get_progress()
 
 
 @router.post("/config")
@@ -604,14 +627,12 @@ def save_detection_config(req: SaveConfigRequest):
 @router.post("/upload")
 @limiter.limit("5/minute")
 async def upload_video(request: Request, file: UploadFile = File(...)):
-    """Upload a video file for detection with enhanced validation.
+    """Upload a video file for detection with streaming writes.
 
-    Security improvements:
-    - Extension validation
-    - MIME type validation
-    - File content validation using filetype
-    - Size limit enforcement
-    - Safe filename generation
+    Optimizations:
+    - Streams file chunks directly to disk (no full-file memory load)
+    - Uses extension validation (fast, no content scan needed for video)
+    - First 8KB chunk for MIME check if filetype is available
     """
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -623,35 +644,73 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     if not is_valid:
         return {"status": "error", "message": error_msg}
 
-    content = await file.read()
-    content_size = len(content)
-
-    if content_size > MAX_UPLOAD_SIZE_BYTES:
-        return {
-            "status": "error",
-            "message": f"File too large. Maximum size: {MAX_UPLOAD_SIZE_MB}MB",
-        }
-
-    if content_size == 0:
-        return {"status": "error", "message": "Empty file"}
-
-    is_valid, error_msg = validate_upload_mime(content)
-    if not is_valid:
-        return {"status": "error", "message": error_msg}
-
-    # Get MIME type for logging
-    kind = filetype.guess(content)
-    mime_type = kind.mime if kind else "unknown"
-
     import secrets
     safe_filename = f"upload_{int(time.time())}_{secrets.token_hex(4)}{ext}"
     dest = UPLOAD_DIR / safe_filename
+
+    total_size = 0
+    mime_checked = False
+    mime_type = "unknown"
+
+    # Read file in chunks using the underlying SpooledTemporaryFile
+    chunk_size = 64 * 1024  # 64KB chunks
     with open(dest, "wb") as f:
-        f.write(content)
+        header_buf = bytearray()
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            chunk_len = len(chunk)
+            total_size += chunk_len
+
+            if total_size > MAX_UPLOAD_SIZE_BYTES:
+                f.close()
+                dest.unlink(missing_ok=True)
+                return {
+                    "status": "error",
+                    "message": f"File too large. Maximum size: {MAX_UPLOAD_SIZE_MB}MB",
+                }
+
+            if not mime_checked:
+                header_buf.extend(chunk)
+                if len(header_buf) >= 1024:
+                    mime_checked = True
+                    if filetype:
+                        try:
+                            kind = filetype.guess(bytes(header_buf))
+                            mime_type = kind.mime if kind else "unknown"
+                            is_valid, error_msg = validate_upload_mime(bytes(header_buf))
+                            if not is_valid:
+                                f.close()
+                                dest.unlink(missing_ok=True)
+                                return {"status": "error", "message": error_msg}
+                        except Exception:
+                            pass
+                    f.write(bytes(header_buf))
+                    header_buf.clear()
+                continue
+
+            f.write(chunk)
+
+        if not mime_checked:
+            if header_buf:
+                mime_checked = True
+                if filetype:
+                    try:
+                        kind = filetype.guess(bytes(header_buf))
+                        mime_type = kind.mime if kind else "unknown"
+                    except Exception:
+                        pass
+                f.write(bytes(header_buf))
+                header_buf.clear()
+
+    if total_size == 0:
+        dest.unlink(missing_ok=True)
+        return {"status": "error", "message": "Empty file"}
 
     logger.info(
         "Uploaded video saved to %s (size=%d bytes, type=%s)",
-        dest, content_size, mime_type,
+        dest, total_size, mime_type,
     )
     return {"status": "uploaded", "path": f"uploads/{safe_filename}", "filename": file.filename}
 

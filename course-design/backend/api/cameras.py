@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Camera management API endpoints."""
 

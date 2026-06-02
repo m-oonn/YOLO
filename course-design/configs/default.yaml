@@ -1,53 +1,119 @@
-alarm:
-  cooldown_s: 30.0
-  enabled: true
-  sound_enabled: true
+# ---------------------------------------------------------------
+# Campus Safety Detection System — Default Configuration
+# ---------------------------------------------------------------
+
 camera:
-  buffer_size: 30
   fps: 30
   url: ''
+
 mllm:
   alarm_enhance_enabled: true
-  enabled: true
+  enabled: false
   enhancement_cooldown_s: 10.0
   inference_backend: auto
   key_frame_interval: 15
-  max_new_tokens: 256
+  max_new_tokens: 512
   model_path: models/mllm/qwen2-vl-2b
   model_type: qwen2-vl-2b
   scene_description_enabled: true
-  shadow_mode: true
+  shadow_mode: false
+
 model:
   classes: null
-  conf: 0.35
+  conf: 0.25
   device: cuda
+  half: true
   imgsz: 640
   inference_scale: 1.0
-  iou: 0.5
-  jpeg_quality: 80
-  path: models/yolo12m.pt
-  process_interval: 2
+  iou: 0.50
+  jpeg_quality: 70
+  path: models/yolo12s.pt
+  tracker: bytetrack
+
 output:
   directory: outputs
   save_snapshots: true
   view: true
+
 pose:
   enabled: true
-  kp_threshold: 0.5
-  max_skeletons: 50
-  process_interval: 2
-  smoothing_alpha: 0.3
+  kp_threshold: 0.4
+  max_skeletons: 30
+  model_path: models/yolo11n-pose.pt
+  process_interval: 3
+  smoothing_alpha: 0.4
+
 rules:
-  crowd: true
-  fall: true
-  fight:
-    debounce_s: 5.0
-    distance_threshold: 150
+  running:
     enabled: true
-    min_duration_s: 0.5
-    movement_threshold: 30
+    speed_px_s: 350.0
+    min_duration_s: 0.4
+    debounce_s: 5.0
+
+  fall:
+    enabled: true
+    upright_aspect_min: 1.1
+    fallen_aspect_max: 0.95
+    transition_window_s: 2.0
+    debounce_s: 5.0
+    confirm_frames: 6
+    min_aspect_change_rate: 0.10
+
+  crowd:
+    enabled: true
+    min_people: 4
+    proximity_px: 180.0
+    debounce_s: 8.0
+    min_duration_s: 1.5
+
   intrusion:
-    debounce_s: 5.0
     enabled: true
+    debounce_s: 5.0
     zones: []
-  run: true
+    min_duration_s: 1.0
+
+  fight:
+    enabled: true
+    distance_threshold: 150
+    movement_threshold: 30
+    iou_threshold: 0.05
+    chaos_threshold: 60.0
+    min_duration_s: 0.6
+    debounce_s: 5.0
+    required_score: 4
+
+  vehicle:
+    enabled: false
+    zones: []
+    debounce_s: 10.0
+    min_duration_s: 2.0
+
+  skeleton:
+    running:
+      enabled: true
+      speed_threshold_kmh: 10.0
+      min_duration_s: 0.4
+      debounce_s: 5.0
+    fall:
+      enabled: true
+      torso_angle_threshold: 40.0
+      head_height_threshold: 0.3
+      fall_velocity_threshold: 0.4
+      emergency_velocity_px: 1.2
+      min_duration_s: 0.2
+      debounce_s: 8.0
+    fight:
+      enabled: true
+      proximity_threshold_m: 2.0
+      wrist_speed_threshold_ms: 1.5
+      limb_frequency_threshold: 2.5
+      min_duration_s: 0.4
+      debounce_s: 5.0
+    crowd:
+      enabled: true
+      density_threshold: 3.5
+      min_duration_s: 3.0
+      debounce_s: 8.0
+    intrusion:
+      enabled: true
+      debounce_s: 5.0

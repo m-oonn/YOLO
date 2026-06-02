@@ -1,66 +1,57 @@
 <!--
   Copyright (c) 2025 YOLO Course Design Contributors
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 
 <template>
   <div class="events-container">
-    <el-card shadow="never" class="filter-card">
-      <div class="filter-row">
-        <div class="filter-left">
-          <el-select
-            v-model="filterType"
-            placeholder="全部类型"
-            clearable
-            class="type-select"
-            @change="loadEvents"
-          >
-            <el-option v-for="t in eventTypes" :key="t" :label="eventTypeLabel(t)" :value="t" />
-          </el-select>
-          <el-button type="primary" :icon="Search" @click="loadEvents">查询</el-button>
-          <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
-        </div>
-        <div class="filter-right">
-          <span class="total-text">
-            共
-            <strong>{{ total }}</strong>
-            条事件
-          </span>
-          <el-button type="danger" plain size="small" :icon="Delete" @click="confirmClearAll">
-            清空全部
-          </el-button>
-        </div>
-      </div>
-    </el-card>
+    <PageHeader title="事件记录" subtitle="查看和管理所有检测到的事件">
+      <template #actions>
+        <ActionButton
+          type="danger"
+          plain
+          size="small"
+          :icon="Delete"
+          :action="clearAllEvents"
+          :confirmConfig="{ title: '确认清空', message: '确定要清空所有事件记录吗？此操作不可恢复！', type: 'warning' }"
+          successMessage="事件已清空"
+          errorMessage="清空失败"
+          @success="loadEvents"
+        >
+          清空全部
+        </ActionButton>
+      </template>
+    </PageHeader>
 
-    <el-row :gutter="12" class="stats-row">
-      <el-col v-for="(count, type) in statsByType" :key="type" :xs="12" :sm="8" :md="6" :lg="4">
-        <transition name="card-pop" mode="out-in">
-          <el-card shadow="never" :body-style="{ padding: '16px' }" class="stat-card">
-            <div class="stat-item">
-              <div class="stat-info">
-                <span class="stat-label">{{ eventTypeLabel(type) }}</span>
-                <span class="stat-value">{{ count }}</span>
-              </div>
-              <el-icon :size="28" class="stat-icon" :style="{ color: statColor(type) }">
-                <component :is="statIcon(type)" />
-              </el-icon>
-            </div>
-          </el-card>
-        </transition>
-      </el-col>
-    </el-row>
+    <!-- Filter bar -->
+    <SearchFilterBar
+      :filters="eventTypeFilters"
+      @search="onSearch"
+      @reset="resetFilters"
+    >
+      <template #right>
+        <span class="total-text">
+          共 <strong>{{ total }}</strong> 条事件
+        </span>
+      </template>
+    </SearchFilterBar>
 
-    <el-card shadow="never">
-      <div v-if="skeletonLoading" class="table-skeleton">
-        <div v-for="i in 5" :key="i" class="skeleton-row">
-          <div class="skeleton skeleton-cell" style="width: 80px" />
-          <div class="skeleton skeleton-cell" style="width: 50px" />
-          <div class="skeleton skeleton-cell" style="flex: 1" />
-          <div class="skeleton skeleton-cell" style="width: 70px" />
-          <div class="skeleton skeleton-cell" style="width: 120px" />
-        </div>
+    <!-- Stats cards row -->
+    <div class="stats-row">
+      <div v-for="(count, type) in statsByType" :key="type" class="stat-card-wrap">
+        <StatCard
+          :label="eventTypeLabel(type)"
+          :value="count"
+          :icon="statIcon(type)"
+          :color="statColor(type)"
+          size="small"
+        />
       </div>
+    </div>
+
+    <!-- Events table -->
+    <el-card shadow="never" class="table-card">
+      <SkeletonLoader v-if="skeletonLoading" type="table" :rows="5" />
       <el-table
         v-else
         v-loading="loading"
@@ -69,10 +60,45 @@
         max-height="500"
         :empty-text="tableEmptyText"
         row-class-name="event-row"
+        row-key="id"
+        :expand-row-keys="expandedRow ? [expandedRow] : []"
+        @row-click="onRowClick"
+        highlight-current-row
+        class="events-table"
       >
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="expand-detail">
+              <div v-if="row.extra?.mllm_narrative" class="mllm-panel">
+                <div class="mllm-header">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                  <span class="mllm-title">AI 场景分析</span>
+                  <el-tag v-if="row.extra?.mllm_risk_level" size="small" :type="row.extra.mllm_risk_level === '高' ? 'danger' : row.extra.mllm_risk_level === '中' ? 'warning' : 'info'">
+                    风险: {{ row.extra.mllm_risk_level }}
+                  </el-tag>
+                </div>
+                <p class="mllm-narrative">{{ row.extra.mllm_narrative }}</p>
+                <p v-if="row.extra?.mllm_action" class="mllm-action">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  建议: {{ row.extra.mllm_action }}
+                </p>
+              </div>
+              <div v-else class="mllm-panel mllm-empty">
+                <span class="mllm-title">AI 场景分析</span>
+                <span class="mllm-pending">MLLM 推理中或未启用</span>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="event_type" label="类型" width="120">
           <template #default="{ row }">
-            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="light">
+            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="dark" class="event-tag">
               {{ eventTypeLabel(row.event_type) }}
             </el-tag>
           </template>
@@ -98,14 +124,9 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="track_id" label="目标ID" width="90" class-name="hide-mobile" />
         <el-table-column prop="zone_name" label="区域" width="100" class-name="hide-tablet" />
-        <el-table-column prop="confidence" label="置信度" width="90" class-name="hide-mobile">
+        <el-table-column prop="confidence" label="置信度" width="80" class-name="hide-mobile">
           <template #default="{ row }">
-            <el-progress
-              v-if="row.confidence"
-              :percentage="Number((row.confidence * 100).toFixed(1))"
-              :stroke-width="6"
-              :color="confidenceColor(row.confidence)"
-            />
+            <ConfidenceGauge v-if="row.confidence" :value="row.confidence" :size="36" />
             <span v-else class="no-snap">-</span>
           </template>
         </el-table-column>
@@ -135,10 +156,17 @@
       </div>
     </el-card>
 
+    <!-- Video clips -->
     <el-card v-if="clips.length > 0" shadow="never" class="clips-card">
       <template #header>
         <div class="clips-header">
-          <span class="clips-title">事件视频回放</span>
+          <span class="clips-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
+              <path d="M23 7l-7 5 7 5V7z"/>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            </svg>
+            事件视频回放
+          </span>
           <span class="clips-count">{{ clips.length }} 个片段</span>
         </div>
       </template>
@@ -154,10 +182,13 @@
           @keydown.enter="playClip(clip)"
         >
           <div class="clip-thumb">
-            <el-icon :size="32" class="clip-play-icon"><VideoPlay /></el-icon>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polygon points="10 8 16 12 10 16 10 8"/>
+            </svg>
           </div>
           <div class="clip-info">
-            <el-tag :type="eventTypeColor(clip.event_type)" size="small">
+            <el-tag :type="eventTypeColor(clip.event_type)" size="small" effect="dark">
               {{ eventTypeLabel(clip.event_type) }}
             </el-tag>
             <span class="clip-dur">{{ clip.duration_s?.toFixed(1) }}s</span>
@@ -167,6 +198,7 @@
       </div>
     </el-card>
 
+    <!-- Video player dialog -->
     <el-dialog
       v-model="showPlayer"
       title="视频回放"
@@ -188,21 +220,9 @@
 </template>
 
 <script setup>
-/**
- * EventsView.vue - Detection event history and statistics page.
- *
- * Displays a paginated, filterable list of detection events (intrusion,
- * fight, fall, crowd, running) with:
- * - Real-time event statistics (counts by type, severity distribution)
- * - Event type filtering and time-range selection
- * - Snapshot preview for each event
- * - Bulk delete and individual event management
- * - Video clip playback for archived events
- */
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
-import { VideoPlay, Search, RefreshLeft, Delete } from '@element-plus/icons-vue'
+import { Delete, Cpu, WarningFilled, VideoPlay } from '@element-plus/icons-vue'
 import { eventsAPI, archivesAPI } from '../api/client'
 import { logger } from '../utils/logger'
 import {
@@ -210,15 +230,21 @@ import {
   eventTypeLabel,
   statColor,
   statIcon,
-  confidenceColor,
   formatDateTime,
 } from '../utils/helpers'
+import PageHeader from '../components/PageHeader.vue'
+import StatCard from '../components/StatCard.vue'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
+import ConfidenceGauge from '../components/ConfidenceGauge.vue'
+import SearchFilterBar from '../components/SearchFilterBar.vue'
+import ActionButton from '../components/ActionButton.vue'
 
 const events = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = 50
 const filterType = ref('')
+const filterSearch = ref('')
 const eventTypes = ref([])
 const stats = ref({ by_type: {} })
 const loading = ref(false)
@@ -234,7 +260,35 @@ const statsByType = computed(() => stats.value.by_type || {})
 
 const tableEmptyText = computed(() => (loadError.value ? '加载失败，请检查后端服务' : '暂无事件'))
 
+const eventTypeFilters = computed(() => [
+  {
+    key: 'search',
+    type: 'input',
+    label: '搜索特征',
+    placeholder: '如：红色上衣、背包、戴帽子',
+  },
+  {
+    key: 'event_type',
+    type: 'select',
+    label: '全部类型',
+    options: eventTypes.value.map((t) => ({ value: t, label: eventTypeLabel(t) })),
+  },
+])
+
 const snapshotUrl = (id) => eventsAPI.snapshotUrl(id)
+const expandedRow = ref(null)
+
+const onRowClick = (row) => {
+  expandedRow.value = expandedRow.value === row.id ? null : row.id
+}
+
+const onSearch = (params) => {
+  filterType.value = params.event_type || ''
+  filterSearch.value = params.search || ''
+  page.value = 1
+  loadEvents()
+  loadStats()
+}
 
 const loadEvents = async () => {
   loading.value = true
@@ -242,6 +296,7 @@ const loadEvents = async () => {
   try {
     const params = { limit: pageSize, offset: (page.value - 1) * pageSize }
     if (filterType.value) params.event_type = filterType.value
+    if (filterSearch.value) params.search = filterSearch.value
     const res = await eventsAPI.list(params)
     events.value = res.items || res.events || []
     total.value = res.total || 0
@@ -273,22 +328,14 @@ const loadEventTypes = async () => {
 
 const resetFilters = () => {
   filterType.value = ''
+  filterSearch.value = ''
   page.value = 1
   loadEvents()
 }
 
-const confirmClearAll = () => {
-  ElMessageBox.confirm('确定要清空所有事件记录吗？此操作不可恢复。', '确认清空', {
-    confirmButtonText: '清空',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-    .then(async () => {
-      await eventsAPI.deleteAll()
-      loadEvents()
-      loadStats()
-    })
-    .catch(() => {})
+const clearAllEvents = async () => {
+  await eventsAPI.deleteAll()
+  loadStats()
 }
 
 const redetect = (row) => {
@@ -332,34 +379,8 @@ onMounted(() => {
   gap: 16px;
   max-width: 1400px;
   margin: 0 auto;
-}
-
-.filter-card {
-  flex-shrink: 0;
-}
-
-.filter-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.type-select {
-  width: 160px;
-}
-
-.filter-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .total-text {
@@ -368,72 +389,41 @@ onMounted(() => {
 }
 
 .total-text strong {
-  color: var(--primary-color);
+  color: var(--color-primary);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .stats-row {
-  margin-bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
 }
 
-.stat-card {
-  margin-bottom: 12px;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+.stat-card-wrap {
+  min-width: 0;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
+/* Table card */
+.table-card :deep(.el-card__body) {
+  padding: 0;
 }
 
-.stat-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.table-card :deep(.el-card__header) {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.stat-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-icon {
-  opacity: 0.8;
-}
-
-.table-skeleton {
-  padding: 12px 0;
-}
-
-.skeleton-row {
-  display: flex;
-  gap: 16px;
-  padding: 12px 16px;
-  align-items: center;
-}
-
-.skeleton-cell {
-  height: 20px;
-  border-radius: 4px;
+.events-table :deep(.el-tag) {
+  font-weight: 500;
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: center;
   margin-top: 16px;
+  padding: 0 16px 16px;
 }
 
 .snapshot-thumb {
@@ -450,44 +440,13 @@ onMounted(() => {
 }
 
 .no-snap {
-  color: #ccc;
+  color: var(--text-disabled);
   font-size: 12px;
 }
 
-.card-pop-enter-active {
-  transition: all 0.3s ease;
-}
-
-.card-pop-leave-active {
-  transition: all 0.2s ease;
-}
-
-.card-pop-enter-from {
-  opacity: 0;
-  transform: translateY(8px) scale(0.96);
-}
-
-.card-pop-leave-to {
-  opacity: 0;
-  transform: scale(0.96);
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-:deep(.event-row) {
-  transition: background 0.2s;
-}
-
-.clips-card {
-  flex-shrink: 0;
+/* Clips */
+.clips-card :deep(.el-card__header) {
+  padding: 14px 16px;
 }
 
 .clips-header {
@@ -499,11 +458,15 @@ onMounted(() => {
 .clips-title {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
 }
 
 .clips-count {
   color: var(--text-secondary);
   font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .clips-grid {
@@ -515,33 +478,26 @@ onMounted(() => {
 .clip-item {
   width: 160px;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid var(--border-color);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+  background: var(--bg-elevated);
 }
 
 .clip-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.clip-item:focus-visible {
-  outline: 2px solid var(--primary-color);
-  outline-offset: 2px;
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-default);
 }
 
 .clip-thumb {
   width: 100%;
   height: 90px;
-  background: #1a1a2e;
+  background: var(--bg-root);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.clip-play-icon {
-  color: rgba(255, 255, 255, 0.7);
 }
 
 .clip-info {
@@ -557,13 +513,66 @@ onMounted(() => {
   font-size: 11px;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .clip-player {
   width: 100%;
   max-height: 480px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: #000;
+}
+
+/* MLLM panel */
+.expand-detail {
+  padding: 8px 0;
+}
+
+.mllm-panel {
+  background: var(--bg-root);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  max-width: 700px;
+}
+
+.mllm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mllm-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-primary);
+}
+
+.mllm-narrative {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.mllm-action {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mllm-empty {
+  color: var(--text-disabled);
+  font-size: 13px;
+}
+
+.mllm-pending {
+  margin-left: 8px;
+  font-style: italic;
 }
 
 @media (max-width: 1024px) {
@@ -573,34 +582,12 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .filter-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .type-select {
-    width: 100%;
-  }
-
-  .filter-left {
-    width: 100%;
-  }
-
-  .filter-left .el-button {
-    flex: 1;
-  }
-
-  .filter-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-
   :deep(.hide-mobile) {
     display: none;
   }
 
-  .stat-value {
-    font-size: 22px;
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .clip-item {
@@ -615,10 +602,6 @@ onMounted(() => {
 @media (max-width: 480px) {
   .events-container {
     gap: 10px;
-  }
-
-  .stat-value {
-    font-size: 20px;
   }
 
   .clip-item {

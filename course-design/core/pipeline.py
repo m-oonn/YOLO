@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Core detection pipeline: captures video, runs YOLO inference, applies rules, stores events."""
 
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -18,12 +19,18 @@ from ultralytics import YOLO
 
 from .config import AppConfig, RuntimeSettings
 from .constants import PERSON_CLASS_ID, get_class_name, get_detection_color
+from .feature_indexer import FeatureIndexer
 from .events_store import EventsStore
 from .gpu_manager import GPUManager
 from .rules import Detection, Event, RulesEngine
 from .behavior_analyzer import BehaviorAnalyzer
 from .skeleton import Skeleton, SkeletonExtractor, SkeletonRenderer
 from .video_archiver import VideoClipRecorder
+from .tensorrt_utils import (
+    is_tensorrt_available,
+    TRTModelWrapper,
+    TensorRTConverter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +40,31 @@ def _write_snapshot(path: str, image_data: np.ndarray) -> None:
     try:
         cv2.imwrite(path, image_data, [cv2.IMWRITE_JPEG_QUALITY, 85])
     except Exception as e:
-        logger.warning("Async snapshot write failed: %s", e)
+        logger.warning(f"Snapshot write failed: {e}")
+
+
+def _index_snapshot_features(
+    events_with_snapshots: list[tuple[int, str]],
+    store: EventsStore,
+) -> None:
+    """Encode snapshot images with CLIP and update event feature_blob."""
+    indexer = FeatureIndexer.instance()
+    if not indexer.available:
+        return
+    for event_id, snapshot_path in events_with_snapshots:
+        vec = indexer.encode_image(snapshot_path)
+        if vec is not None:
+            blob = indexer.vector_to_blob(vec)
+            try:
+                with store._lock:
+                    cur = store.conn.cursor()
+                    cur.execute(
+                        "UPDATE events SET feature_blob = ? WHERE id = ?",
+                        (sqlite3.Binary(blob), event_id),
+                    )
+                    store.conn.commit()
+            except Exception as e:
+                logger.debug("Feature indexing update failed: %s", e)
 
 
 def _deduplicate_events(events: list[Event]) -> list[Event]:
@@ -89,7 +120,7 @@ class DetectionPipeline:
         self._skeleton_enabled = cfg.pose.enabled
         self._current_source: str | None = None
 
-        self._sk_process_interval = cfg.pose.process_interval
+        self._sk_process_interval = max(1, min(10, cfg.pose.process_interval))
         self._sk_frame_counter = 0
         self._cached_skeletons: list[Skeleton] = []
         self._cached_raw_skeletons: list[Any] = []
@@ -109,14 +140,55 @@ class DetectionPipeline:
             max_workers=1, thread_name_prefix="snapshot"
         )
 
-        logger.info(f"Loading model: {cfg.model_path}")
-        self.model = YOLO(cfg.model_path)
-        self.model.eval()
+        # TensorRT mode check
+        self._use_tensorrt = cfg.tensorrt.enabled and is_tensorrt_available()
+        self._trt_model = None
+
+        if self._use_tensorrt:
+            logger.info(f"TensorRT mode enabled, loading engine for: {cfg.model_path}")
+            try:
+                converter = TensorRTConverter(config=cfg.tensorrt)
+                engine_path = converter.convert(
+                    model_path=cfg.model_path,
+                    imgsz=cfg.imgsz,
+                    force_rebuild=False,
+                )
+                self._trt_model = TRTModelWrapper(
+                    engine_path=engine_path,
+                    imgsz=cfg.imgsz,
+                    conf=cfg.conf,
+                    iou=cfg.iou,
+                    classes=cfg.classes if cfg.classes else None,
+                    device=self._device,
+                )
+                self.model = None  # Don't load PyTorch model
+                logger.info(f"TensorRT engine loaded: {engine_path}")
+            except Exception as e:
+                logger.warning(f"TensorRT initialization failed: {e}, falling back to PyTorch")
+                self._use_tensorrt = False
+                self._trt_model = None
+
+        if not self._use_tensorrt:
+            logger.info(f"Loading PyTorch model: {cfg.model_path}")
+            self.model = YOLO(cfg.model_path)
+            self.model.eval()
+
+        self._fall_model = self._load_secondary_model(
+            cfg.fall_model_path, "fall posture"
+        )
+        self._fight_model = self._load_secondary_model(
+            cfg.fight_model_path, "fight detection"
+        )
+        self._model_secondary_frame_skip = 3
+        self._mllm_frame_skip = 5
+        self._mllm_frame_counter = 0
+        self._stream_frame_skip = 1
+        self._stream_frame_counter = 0
         self._runtime = RuntimeSettings(cfg)
 
         self._gpu_mgr = GPUManager()
         self._device = self._gpu_mgr.resolve_device(cfg.device)
-        self._half = self._gpu_mgr.should_use_half(self._device)
+        self._half = cfg.half or self._gpu_mgr.should_use_half(self._device)
         self._use_gpu_preprocess = self._gpu_mgr.is_cuda and self._half
         logger.info(
             f"Using device: {self._device}, half precision: {self._half}, "
@@ -159,6 +231,69 @@ class DetectionPipeline:
         )
         logger.info("Video clip recorder initialized")
 
+    @staticmethod
+    def _load_secondary_model(path: str, name: str) -> YOLO | None:
+        import os
+        if not path or not os.path.exists(path):
+            logger.info(f"Secondary model '{name}': not found ({path})")
+            return None
+        try:
+            model = YOLO(path, task="detect")
+            logger.info(f"Secondary model '{name}': loaded")
+            return model
+        except Exception as e:
+            logger.warning(f"Secondary model '{name}': load failed ({e})")
+            return None
+
+    def _classify_posture(self, frame, detections):
+        """Run fall posture model on person bbox crops."""
+        if self._fall_model is None or not detections:
+            return []
+        results = []
+        for i, d in enumerate(detections):
+            if d.class_id != PERSON_CLASS_ID:
+                continue
+            x1, y1 = max(0, int(d.x1)), max(0, int(d.y1))
+            x2, y2 = min(frame.shape[1], int(d.x2)), min(frame.shape[0], int(d.y2))
+            if x2 <= x1 or y2 <= y1:
+                continue
+            crop = frame[y1:y2, x1:x2]
+            if crop.size == 0:
+                continue
+            try:
+                preds = self._fall_model(crop, imgsz=640, verbose=False, device=self._device)
+                if preds and preds[0].boxes and len(preds[0].boxes) > 0:
+                    best = preds[0].boxes.conf.argmax()
+                    results.append((
+                        i,
+                        self._fall_model.names.get(int(preds[0].boxes.cls[best].item()), "?"),
+                        float(preds[0].boxes.conf[best].item()),
+                    ))
+            except Exception as e:
+                logger.debug("Posture classification error: %s", e)
+        return results
+
+    def _detect_fight_model(self, frame):
+        """Run fight model on full frame, return violence detections."""
+        if self._fight_model is None:
+            return []
+        dets = []
+        try:
+            preds = self._fight_model(frame, imgsz=640, verbose=False, device=self._device)
+            if preds and preds[0].boxes and len(preds[0].boxes) > 0:
+                for box in preds[0].boxes:
+                    cls_name = self._fight_model.names.get(int(box.cls.item()), "").lower()
+                    xyxy = box.xyxy[0].tolist()
+                    conf = float(box.conf.item())
+                    dets.append({
+                        "bbox": {"x1": xyxy[0], "y1": xyxy[1], "x2": xyxy[2], "y2": xyxy[3]},
+                        "conf": conf,
+                        "class": cls_name,
+                    })
+        except Exception as e:
+            logger.debug("Fight model inference error: %s", e)
+        return dets
+
     def _init_alarm_engine(self) -> None:
         try:
             from backend.alarm_singleton import get_alarm_engine
@@ -196,26 +331,41 @@ class DetectionPipeline:
             inference_frame = frame
 
         t_inf_start = time.time()
-        with torch.no_grad():
-            results = self.model.track(
+        if self._use_tensorrt and self._trt_model is not None:
+            # TensorRT inference path
+            trt_results = self._trt_model.predict(
                 inference_frame,
-                persist=True,
                 conf=self._runtime.conf,
                 iou=self._runtime.iou,
-                imgsz=self.cfg.imgsz,
                 classes=self.cfg.classes if self.cfg.classes else None,
                 verbose=False,
-                device=self._device,
-                half=self._half,
             )
+            # Wrap TRT results to match Ultralytics API
+            results = [self._wrap_trt_results(trt_results, inference_frame.shape[:2])]
+        else:
+            # PyTorch inference path
+            with torch.no_grad():
+                results = self.model.track(
+                    inference_frame,
+                    persist=True,
+                    conf=self._runtime.conf,
+                    iou=self._runtime.iou,
+                    imgsz=self.cfg.imgsz,
+                    classes=self.cfg.classes if self.cfg.classes else None,
+                    tracker=f"{self.cfg.tracker}.yaml" if self.cfg.tracker else "bytetrack.yaml",
+                    verbose=False,
+                    device=self._device,
+                    half=self._half,
+                )
         self._perf_inference_ms = (time.time() - t_inf_start) * 1000
 
-        if self._gpu_mgr.is_cuda and frame_idx - self._last_cache_clear_frame >= 300:
+        # CUDA memory managed by PyTorch allocator; only clear on extreme pressure
+        if self._gpu_mgr.is_cuda and frame_idx - self._last_cache_clear_frame >= 18000:
             try:
                 torch.cuda.empty_cache()
                 self._last_cache_clear_frame = frame_idx
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("CUDA cache clear skipped: %s", e)
 
         if self._inference_scale < 1.0 and results and results[0].boxes is not None:
             scale = 1.0 / self._inference_scale
@@ -244,38 +394,51 @@ class DetectionPipeline:
                 should_process = self._sk_frame_counter % self._sk_process_interval == 0
 
                 if should_process:
-                    # Map detection indices to track_ids for skeleton alignment
-                    track_id_map: dict[int, int | None] = {}
-                    if results and results[0].keypoints:
-                        boxes = results[0].boxes
-                        ids = boxes.id.cpu().numpy() if boxes.id is not None else [None] * len(boxes)
-                        for i, tid in enumerate(ids):
-                            track_id_map[i] = int(tid) if tid is not None else None
-
-                    raw_skeletons = self._sk_extractor.extract(results, track_id_map)
+                    det_dicts: list[dict] = [
+                        {"bbox": {"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2},
+                         "track_id": d.track_id}
+                        for d in detections
+                        if d.class_id == PERSON_CLASS_ID
+                    ]
+                    raw_skeletons = self._sk_extractor.extract(frame, det_dicts)
                     self._cached_raw_skeletons = raw_skeletons
-
-                    # Run behavior analysis (smoothing + rule detection)
                     sk_events, self._skeletons = self._behavior_analyzer.analyze(
                         raw_skeletons, timestamp_s, frame_idx, h, w,
                     )
                     self._cached_skeletons = self._skeletons
                     frame_events.extend(sk_events)
-
-                    # Deduplicate: prefer skeleton events over bbox events for
-                    # the same (event_type, track_id). Skeleton-based rules use
-                    # multi-signal fusion and perspective calibration, producing
-                    # far fewer false positives than bbox heuristics.
                     frame_events = _deduplicate_events(frame_events)
                 else:
-                    # 非提取帧直接使用缓存的骨架数据，跳过 behavior analyzer
-                    # 避免用陈旧骨架数据产生虚假的速度/加速度特征
-                    self._skeletons = self._cached_skeletons
-
+                    frame_events = list(frame_events)  # ensure mutable
             except Exception as e:
                 logger.warning("Skeleton analysis error: %s", e)
+                self._skeletons = self._cached_skeletons
             finally:
                 self._perf_skeleton_ms = (time.time() - t_skel_start) * 1000
+
+        # --- Secondary model inference (every N frames) ---
+        # Posture model disabled: per-person GPU inference produces no fused events
+        # and competes with main detector for GPU resources, causing frame drops
+        if frame_idx % self._model_secondary_frame_skip == 0:
+            for fd in self._detect_fight_model(frame):
+                if fd["conf"] >= 0.3:
+                    cls = fd["class"]
+                    # Suspicious Activity 10-class model mapping
+                    if cls in ("violence", "fighting", "assaulting"):
+                        event_type = "fight"
+                    elif cls in ("man_with_gun", "man_with_knife", "knife", "gun"):
+                        event_type = "intrusion"
+                    elif cls in ("kidnapping", "theft", "theaf_robbery", "terrorist_with_time_bomb"):
+                        event_type = "intrusion"
+                    else:
+                        continue
+                    frame_events.append(Event(
+                        event_type=event_type, timestamp_s=timestamp_s,
+                        frame_index=frame_idx,
+                        confidence=fd["conf"], bbox=fd["bbox"],
+                        extra={"detection_method": "model_suspicious",
+                               "model_class": cls},
+                    ))
 
         # Feed frame to clip recorder (ring buffer for event-triggered recording)
         try:
@@ -338,6 +501,25 @@ class DetectionPipeline:
                 batch.append((event, snapshot))
             self.store.record_batch(batch)
 
+            # Submit feature indexing for snapshots in background
+            indexed: list[tuple[int, str]] = []
+            for event, snapshot in batch:
+                if snapshot:
+                    # Get the last inserted event id from record_batch
+                    with self.store._lock:
+                        cur = self.store.conn.cursor()
+                        cur.execute(
+                            "SELECT id FROM events WHERE snapshot_path = ? ORDER BY id DESC LIMIT 1",
+                            (snapshot,),
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            indexed.append((row["id"], snapshot))
+            if indexed:
+                self._snapshot_executor.submit(
+                    _index_snapshot_features, indexed, self.store
+                )
+
         if frame_events and self._alarm_engine:
             try:
                 self._alarm_engine.process_events(frame_events)
@@ -345,20 +527,29 @@ class DetectionPipeline:
                 logger.warning("Alarm processing error: %s", e)
 
         if self._mllm_sidecar is not None:
-            try:
-                det_dicts = [
-                    {"class_name": d.name, "confidence": d.conf, "bbox": (d.x1, d.y1, d.x2, d.y2)}
-                    for d in detections
-                ]
-                event_dicts = [
-                    {"type": e.event_type, "confidence": getattr(e, "confidence", 0)}
-                    for e in frame_events
-                ]
-                self._mllm_sidecar.on_frame(
-                    frame=frame, detections=det_dicts, events=event_dicts
-                )
-            except Exception as e:
-                logger.warning("MLLM sidecar frame error: %s", e)
+            self._mllm_frame_counter = (self._mllm_frame_counter + 1) % self._mllm_frame_skip
+            if self._mllm_frame_counter == 0:
+                try:
+                    det_dicts = [
+                        {"class_name": d.name, "confidence": d.conf, "bbox": (d.x1, d.y1, d.x2, d.y2)}
+                        for d in detections
+                    ]
+                    event_dicts = [
+                        {"type": e.event_type, "confidence": getattr(e, "confidence", 0)}
+                        for e in frame_events
+                    ]
+                    self._mllm_sidecar.on_frame(
+                        frame=frame, detections=det_dicts, events=event_dicts
+                    )
+                    scene = self._mllm_sidecar.last_scene_description or {}
+                    narrative = scene.get("narrative", "") or scene.get("scene_summary", "")
+                    if narrative and frame_events:
+                        for evt in frame_events:
+                            evt.extra.setdefault("mllm_narrative", narrative)
+                            evt.extra.setdefault("mllm_risk_level", scene.get("risk_level", ""))
+                            evt.extra.setdefault("mllm_action", scene.get("suggested_action", ""))
+                except Exception as e:
+                    logger.warning("MLLM sidecar frame error: %s", e)
 
         frame_result: dict[str, Any] = {
             "frame_index": frame_idx,
@@ -370,6 +561,33 @@ class DetectionPipeline:
             frame_result["skeleton_count"] = len(self._skeletons)
         self._perf_total_ms = (time.time() - t0) * 1000
         return frame_result
+
+    def _wrap_trt_results(self, trt_results: list[dict], img_shape: tuple[int, int]):
+        """Wrap TensorRT detection results to match Ultralytics Results API."""
+        class _TRTResults:
+            def __init__(self, detections, shape):
+                self.boxes = _TRTBoxes(detections, shape)
+                self.keypoints = None
+
+        class _TRTBoxes:
+            def __init__(self, detections, shape):
+                import torch
+                self._shape = shape
+                if detections:
+                    self.xyxy = torch.tensor([d["box"] for d in detections], dtype=torch.float32)
+                    self.conf = torch.tensor([d["conf"] for d in detections], dtype=torch.float32)
+                    self.cls = torch.tensor([d["cls"] for d in detections], dtype=torch.float32)
+                    self.id = None  # TensorRT doesn't do tracking natively
+                else:
+                    self.xyxy = torch.empty((0, 4), dtype=torch.float32)
+                    self.conf = torch.empty(0, dtype=torch.float32)
+                    self.cls = torch.empty(0, dtype=torch.float32)
+                    self.id = None
+
+            def __len__(self):
+                return len(self.xyxy)
+
+        return _TRTResults(trt_results, img_shape)
 
     def _extract_detections(self, results) -> list[Detection]:
         """Extract Detection objects from YOLO results with optimized GPU→CPU transfer."""
@@ -408,8 +626,8 @@ class DetectionPipeline:
                         )
                     )
                 return detections
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("GPU detection extraction failed, falling back to CPU: %s", e)
 
         xyxy = boxes.xyxy.cpu().numpy()
         confs = boxes.conf.cpu().numpy() if boxes.conf is not None else [1.0] * len(xyxy)
@@ -468,6 +686,21 @@ class DetectionPipeline:
                         2,
                     )
 
+        if self.cfg.rules.vehicle.enabled:
+            for zone in self.cfg.rules.vehicle.zones:
+                pts = [(int(x), int(y)) for x, y in zone.polygon]
+                if len(pts) >= 3:
+                    cv2.polylines(out, [np.array(pts)], True, (0, 165, 255), 2)
+                    cv2.putText(
+                        out,
+                        f"[V] {zone.name}",
+                        (pts[0][0], max(0, pts[0][1] - 5)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (0, 165, 255),
+                        2,
+                    )
+
         for d in detections:
             color = get_detection_color(d.class_id)
             x1, y1, x2, y2 = int(d.x1), int(d.y1), int(d.x2), int(d.y2)
@@ -497,11 +730,8 @@ class DetectionPipeline:
             2,
         )
 
-        if self._skeleton_enabled and self._skeletons:
-            try:
-                out = self._sk_renderer.render(out, self._skeletons)
-            except Exception as e:
-                logger.warning("Skeleton rendering error: %s", e)
+        # Skeleton analysis runs for behavior detection but not rendered
+        # — bounding boxes are cleaner for surveillance display
 
         self._perf_annotate_ms = (time.time() - t_ann_start) * 1000
         return out
@@ -547,6 +777,7 @@ class DetectionPipeline:
                 "device": self._device,
                 "half_precision": self._half,
                 "gpu_preprocess": self._use_gpu_preprocess,
+                "tensorrt_enabled": self._use_tensorrt,
             },
             "gpu": self._gpu_mgr.get_status_dict(),
             "mllm": self._mllm_sidecar.get_stats() if self._mllm_sidecar else {"enabled": False},
@@ -566,6 +797,13 @@ class DetectionPipeline:
     def cleanup(self) -> None:
         """Clean up resources and free GPU memory."""
         self.running = False
+
+        if self._use_tensorrt and self._trt_model is not None:
+            try:
+                self._trt_model = None
+                logger.info("TensorRT model released")
+            except Exception as e:
+                logger.warning(f"Error releasing TensorRT model: {e}")
 
         if hasattr(self, 'model') and self.model is not None:
             try:
@@ -593,6 +831,14 @@ class DetectionPipeline:
 
     def _warmup_model(self) -> None:
         try:
+            if self._use_tensorrt and self._trt_model is not None:
+                # TensorRT warmup
+                dummy = np.random.randint(0, 255, (self.cfg.imgsz, self.cfg.imgsz, 3), dtype=np.uint8)
+                for _ in range(2):
+                    self._trt_model.predict(dummy, verbose=False)
+                logger.info("TensorRT warmup completed (2 dummy inferences)")
+                return
+
             # 启用 cuDNN 自动调优，针对固定输入尺寸选择最快的卷积算法
             if self._device.startswith("cuda"):
                 torch.backends.cudnn.benchmark = True
@@ -628,6 +874,13 @@ class DetectionPipeline:
             rules=new_cfg.rules,
             mllm=new_cfg.mllm,
         )
+        # Sync RuntimeSettings and internal state so inference uses updated values
+        self._runtime.conf = new_cfg.conf
+        self._runtime.iou = new_cfg.iou
+        self._runtime.inference_scale = new_cfg.inference_scale
+        self._runtime.jpeg_quality = new_cfg.jpeg_quality
+        self._inference_scale = max(0.25, min(1.0, new_cfg.inference_scale))
+        self._jpeg_quality = max(30, min(95, new_cfg.jpeg_quality))
         if self._mllm_sidecar is not None:
             self._mllm_sidecar._config = new_cfg.mllm
         if new_cfg.pose.enabled != self._skeleton_enabled:

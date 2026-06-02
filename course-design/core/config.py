@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Configuration loading and dataclasses for detection engine."""
 
@@ -23,26 +23,29 @@ class Zone:
 @dataclass(frozen=True)
 class RunningRule:
     enabled: bool = False
-    speed_px_s: float = 380
-    min_duration_s: float = 0.6
+    speed_px_s: float = 350
+    min_duration_s: float = 0.4
     debounce_s: float = 5.0
 
 
 @dataclass(frozen=True)
 class FallRule:
     enabled: bool = False
-    upright_aspect_min: float = 1.35
+    upright_aspect_min: float = 1.10
     fallen_aspect_max: float = 0.95
-    transition_window_s: float = 1.0
+    transition_window_s: float = 2.0
     debounce_s: float = 5.0
+    confirm_frames: int = 6
+    min_aspect_change_rate: float = 0.10
 
 
 @dataclass(frozen=True)
 class CrowdRule:
     enabled: bool = False
-    min_people: int = 10
-    proximity_px: float = 200.0
-    debounce_s: float = 10.0
+    min_people: int = 4
+    proximity_px: float = 180.0
+    debounce_s: float = 8.0
+    min_duration_s: float = 1.5
 
 
 @dataclass(frozen=True)
@@ -50,61 +53,74 @@ class IntrusionRule:
     enabled: bool = False
     zones: list[Zone] = field(default_factory=list)
     debounce_s: float = 5.0
+    min_duration_s: float = 1.0
 
 
 @dataclass(frozen=True)
 class FightRule:
     enabled: bool = False
-    distance_threshold: float = 50
-    movement_threshold: float = 100
-    min_duration_s: float = 1.0
+    distance_threshold: float = 150
+    movement_threshold: float = 30
+    iou_threshold: float = 0.05
+    chaos_threshold: float = 60.0
+    min_duration_s: float = 0.6
     debounce_s: float = 5.0
+    required_score: int = 3
+
+
+@dataclass(frozen=True)
+class VehicleRule:
+    enabled: bool = False
+    zones: list[Zone] = field(default_factory=list)
+    debounce_s: float = 10.0
+    min_duration_s: float = 2.0
 
 
 @dataclass(frozen=True)
 class PoseConfig:
     enabled: bool = True
-    model_path: str = "models/yolov11n-pose.pt"
-    kp_threshold: float = 0.5
-    smoothing_alpha: float = 0.3
+    model_path: str = "models/yolo11s-pose.pt"
+    kp_threshold: float = 0.4
+    smoothing_alpha: float = 0.4
     max_skeletons: int = 50
-    process_interval: int = 2
+    process_interval: int = 1
 
 
 @dataclass(frozen=True)
 class SkeletonRunningRule:
     enabled: bool = True
-    speed_threshold_kmh: float = 15.0
-    min_duration_s: float = 0.5
+    speed_threshold_kmh: float = 10.0
+    min_duration_s: float = 0.4
     debounce_s: float = 5.0
 
 
 @dataclass(frozen=True)
 class SkeletonFallRule:
     enabled: bool = True
-    torso_angle_threshold: float = 45.0
+    torso_angle_threshold: float = 40.0
     head_height_threshold: float = 0.3
-    fall_velocity_threshold: float = 0.5
-    min_duration_s: float = 0.3
-    debounce_s: float = 10.0
+    fall_velocity_threshold: float = 0.4
+    emergency_velocity_px: float = 1.2
+    min_duration_s: float = 0.2
+    debounce_s: float = 8.0
 
 
 @dataclass(frozen=True)
 class SkeletonFightRule:
     enabled: bool = True
-    proximity_threshold_m: float = 1.5
-    wrist_speed_threshold_ms: float = 2.0
-    limb_frequency_threshold: float = 3.0
-    min_duration_s: float = 0.5
+    proximity_threshold_m: float = 2.0
+    wrist_speed_threshold_ms: float = 1.5
+    limb_frequency_threshold: float = 2.5
+    min_duration_s: float = 0.4
     debounce_s: float = 5.0
 
 
 @dataclass(frozen=True)
 class SkeletonCrowdRule:
     enabled: bool = True
-    density_threshold: float = 4.0
-    min_duration_s: float = 5.0
-    debounce_s: float = 10.0
+    density_threshold: float = 3.5
+    min_duration_s: float = 3.0
+    debounce_s: float = 8.0
 
 
 @dataclass(frozen=True)
@@ -153,20 +169,25 @@ class RulesConfig:
     crowd: CrowdRule = field(default_factory=CrowdRule)
     intrusion: IntrusionRule = field(default_factory=IntrusionRule)
     fight: FightRule = field(default_factory=FightRule)
+    vehicle: VehicleRule = field(default_factory=VehicleRule)
     skeleton: SkeletonRulesConfig = field(default_factory=SkeletonRulesConfig)
 
 
 @dataclass(frozen=True)
 class AppConfig:
     model_path: str = "models/yolov11x.pt"
+    fall_model_path: str = "models/best.pt"
+    fight_model_path: str = "models/suspicious_activity_nano.pt"
     device: str = "auto"
     imgsz: int = 640
-    conf: float = 0.35
-    iou: float = 0.5
-    classes: list[int] = field(default_factory=list)
+    conf: float = 0.25
+    iou: float = 0.45
+    half: bool = False
+    classes: list = field(default_factory=list)
+    tracker: str = "botsort"
     camera_fps: int = 30
     inference_scale: float = 1.0
-    jpeg_quality: int = 80
+    jpeg_quality: int = 85
     output_dir: str = "outputs"
     save_snapshots: bool = True
     view: bool = True
@@ -280,11 +301,15 @@ def load_config(path: str | None = None) -> AppConfig:
             data = {"enabled": bool(data)}
         return cls(**{**defaults, **data})
 
-    # "run" is the YAML key; "running" is the class name
-    running = _parse_rule("run", RunningRule)
+    running = _parse_rule("running", RunningRule)
     fall = _parse_rule("fall", FallRule)
     crowd = _parse_rule("crowd", CrowdRule)
-    fight = _parse_rule("fight", FightRule)
+    fight = _parse_rule(
+        "fight", FightRule,
+        distance_threshold=150.0, movement_threshold=30.0,
+        iou_threshold=0.05, chaos_threshold=60.0,
+        required_score=3,
+    )
 
     intrusion_raw = rules_raw.get("intrusion", {})
     if not isinstance(intrusion_raw, dict):
@@ -303,6 +328,25 @@ def load_config(path: str | None = None) -> AppConfig:
         debounce_s=float(intrusion_raw.get("debounce_s", 5.0)),
     )
 
+    # Parse vehicle rule
+    vehicle_raw = rules_raw.get("vehicle", {})
+    if not isinstance(vehicle_raw, dict):
+        vehicle_raw = {}
+    vehicle_zones = []
+    for z in vehicle_raw.get("zones", []) or []:
+        vehicle_zones.append(
+            Zone(
+                name=str(z["name"]),
+                polygon=[[float(x), float(y)] for x, y in z["polygon"]],
+            )
+        )
+    vehicle = VehicleRule(
+        enabled=bool(vehicle_raw.get("enabled", False)),
+        zones=vehicle_zones,
+        debounce_s=float(vehicle_raw.get("debounce_s", 10.0)),
+        min_duration_s=float(vehicle_raw.get("min_duration_s", 2.0)),
+    )
+
     # Parse skeleton rules
     skeleton_raw = rules_raw.get("skeleton", {})
     def _parse_sk_rule(key: str, cls, **defaults):
@@ -319,11 +363,11 @@ def load_config(path: str | None = None) -> AppConfig:
     pose_raw = raw.get("pose", {})
     pose = PoseConfig(
         enabled=bool(pose_raw.get("enabled", True)),
-        model_path=str(pose_raw.get("model_path", "models/yolov11n-pose.pt")),
-        kp_threshold=float(pose_raw.get("kp_threshold", 0.5)),
-        smoothing_alpha=float(pose_raw.get("smoothing_alpha", 0.3)),
+        model_path=str(pose_raw.get("model_path", "models/yolo11s-pose.pt")),
+        kp_threshold=float(pose_raw.get("kp_threshold", 0.4)),
+        smoothing_alpha=float(pose_raw.get("smoothing_alpha", 0.4)),
         max_skeletons=int(pose_raw.get("max_skeletons", 50)),
-        process_interval=int(pose_raw.get("process_interval", 2)),
+        process_interval=int(pose_raw.get("process_interval", 1)),
     )
 
     # Parse sequence model config
@@ -396,14 +440,18 @@ def load_config(path: str | None = None) -> AppConfig:
 
     return AppConfig(
         model_path=str(model_cfg.get("path", "models/yolov11x.pt")),
+        fall_model_path=str(model_cfg.get("fall_model_path", "models/best.pt")),
+        fight_model_path=str(model_cfg.get("fight_model_path", "models/suspicious_activity_nano.pt")),
         device=device,
         imgsz=int(model_cfg.get("imgsz", 640)),
-        conf=float(model_cfg.get("conf", 0.35)),
-        iou=float(model_cfg.get("iou", 0.5)),
+        conf=float(model_cfg.get("conf", 0.25)),
+        iou=float(model_cfg.get("iou", 0.45)),
+        half=bool(model_cfg.get("half", False)),
         classes=model_cfg.get("classes", []),
+        tracker=str(model_cfg.get("tracker", "botsort")),
         camera_fps=int(camera_cfg.get("fps", 30)),
         inference_scale=float(model_cfg.get("inference_scale", 1.0)),
-        jpeg_quality=int(model_cfg.get("jpeg_quality", 80)),
+        jpeg_quality=int(model_cfg.get("jpeg_quality", 85)),
         output_dir=str(output_cfg.get("directory", "outputs")),
         save_snapshots=bool(output_cfg.get("save_snapshots", True)),
         view=bool(output_cfg.get("view", True)),
@@ -413,6 +461,7 @@ def load_config(path: str | None = None) -> AppConfig:
             crowd=crowd,
             intrusion=intrusion,
             fight=fight,
+            vehicle=vehicle,
             skeleton=SkeletonRulesConfig(
                 running=sk_running,
                 fall=sk_fall,

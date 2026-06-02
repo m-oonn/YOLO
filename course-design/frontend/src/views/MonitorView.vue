@@ -1,6 +1,6 @@
 <!--
   Copyright (c) 2025 YOLO Course Design Contributors
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 
 <template>
@@ -8,122 +8,122 @@
     <div class="sr-only" aria-live="polite" role="status">
       {{ detectionRunning ? '检测运行中' : detectionLoading ? '检测启动中' : '检测已停止' }}
     </div>
-    <el-card shadow="never" class="control-card">
-      <div class="control-row">
-        <div class="control-left">
-          <el-select
-            v-model="source"
-            placeholder="选择检测源"
-            class="source-select"
-            @change="onSourceChange"
-          >
-            <el-option-group label="摄像头">
-              <el-option
-                v-for="cam in cameras"
-                :key="cam.id"
-                :label="cam.name"
-                :value="String(cam.id)"
-              />
-            </el-option-group>
-            <el-option-group label="其他">
-              <el-option label="视频文件" value="file" />
-            </el-option-group>
-          </el-select>
-          <el-button
-            type="success"
-            :disabled="detectionRunning || switchingMode"
-            :icon="VideoPlay"
-            :loading="starting"
-            @click="startDetection"
-          >
-            启动
-          </el-button>
-          <el-button
-            type="danger"
-            :disabled="!detectionRunning || switchingMode"
-            :icon="VideoPause"
-            @click="stopDetection"
-          >
-            停止
-          </el-button>
+
+    <!-- Control bar -->
+    <PageHeader title="实时监控" subtitle="摄像头检测、视频文件分析、实时画面">
+      <template #actions>
+        <el-select
+          v-model="source"
+          placeholder="选择检测源"
+          class="source-select"
+          @change="onSourceChange"
+        >
+          <el-option-group label="摄像头">
+            <el-option
+              v-for="cam in cameras"
+              :key="cam.id"
+              :label="cam.name"
+              :value="String(cam.id)"
+            />
+          </el-option-group>
+          <el-option-group label="已上传视频">
+            <el-option
+              v-for="f in uploadedFiles"
+              :key="f.path"
+              :label="f.name"
+              :value="f.path"
+            />
+            <el-option label="+ 上传新视频" value="file" />
+          </el-option-group>
+        </el-select>
+        <el-button
+          type="success"
+          :disabled="detectionRunning || detectionLoading || switchingMode"
+          :icon="VideoPlay"
+          :loading="starting"
+          @click="startDetection"
+        >
+          启动
+        </el-button>
+        <el-button
+          type="danger"
+          :disabled="!detectionRunning || switchingMode"
+          :icon="VideoPause"
+          @click="stopDetection"
+        >
+          停止
+        </el-button>
+      </template>
+    </PageHeader>
+
+    <!-- Startup progress -->
+    <div v-if="detectionLoading && startupProgress.step !== 'idle'" class="startup-progress">
+      <div class="progress-header">
+        <el-icon class="progress-icon"><Loading /></el-icon>
+        <span class="progress-message">{{ startupProgress.message }}</span>
+        <span class="progress-percent">{{ startupProgress.percent }}%</span>
+      </div>
+      <el-progress
+        :percentage="startupProgress.percent"
+        :status="startupProgress.step === 'error' ? 'exception' : ''"
+        :stroke-width="8"
+        :show-text="false"
+        class="progress-bar"
+      />
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="status-section">
+        <div class="status-group">
+          <StatusBadge
+            :status="detectionRunning ? 'online' : detectionLoading ? 'loading' : 'offline'"
+            :label="detectionRunning ? '运行中' : detectionLoading ? '启动中...' : '已停止'"
+            :animated="detectionRunning"
+          />
+          <div v-if="detectionRunning" class="metric">
+            <span class="metric-label">FPS</span>
+            <span class="metric-value" :class="fpsClass">{{ fps }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">帧数</span>
+            <span class="metric-value">{{ formatNumber(frameCount) }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">事件</span>
+            <span class="metric-value">{{ formatNumber(eventCount) }}</span>
+          </div>
         </div>
-        <div class="status-bar">
-          <transition name="fade" mode="out-in">
-            <el-tag
-              :key="detectionRunning + '-' + detectionLoading"
-              :type="detectionRunning ? 'success' : detectionLoading ? 'warning' : 'info'"
-              size="small"
-              effect="dark"
-            >
-              {{ detectionRunning ? '运行中' : detectionLoading ? '启动中...' : '已停止' }}
-            </el-tag>
-          </transition>
-          <span
-            v-if="detectionRunning"
-            class="fps-badge"
-            :class="{ 'fps-low': fps < 15, 'fps-warn': fps >= 15 && fps < 30 }"
-          >
-            FPS: {{ fps }}
-          </span>
-          <span class="stat-text">帧: {{ frameCount }}</span>
-          <span class="stat-text">事件: {{ eventCount }}</span>
-          <span
-            v-if="detectionRunning && perfData"
-            class="stat-text perf-text"
-            :title="perfTooltip"
-          >
-            推理: {{ perfData.inference_ms }}ms
-          </span>
-          <span
-            v-if="detectionRunning && perfData"
-            class="stat-text perf-text"
-            :title="`设备: ${perfData.device || 'cpu'} | 半精度: ${perfData.half_precision ? '是' : '否'}`"
-          >
-            <el-tag
-              :type="
-                perfData.device === 'cuda:0'
-                  ? 'success'
-                  : perfData.device === 'mps'
-                    ? 'warning'
-                    : 'danger'
-              "
-              size="small"
-              effect="plain"
-            >
-              {{ perfData.device === 'cuda:0' ? 'GPU' : perfData.device === 'mps' ? 'MPS' : 'CPU' }}
-            </el-tag>
-          </span>
-          <span v-if="detectionRunning && perfData && perfData.gpu_preprocess" class="stat-text">
-            <el-tag type="success" size="small" effect="plain">GPU预处理</el-tag>
-          </span>
-          <span v-if="gpuStatus && gpuStatus.gpu_available" class="stat-text gpu-mem-stat">
-            <el-tag
-              :type="gpuMemTagType"
-              size="small"
-              effect="plain"
-            >
-              显存 {{ gpuStatus.gpu_total_used_mb || gpuStatus.gpu_used_memory_mb || 0 }}/{{ gpuStatus.gpu_total_memory_mb }}MB
-              <span v-if="gpuStatus.gpu_memory_usage_pct"> ({{ gpuStatus.gpu_memory_usage_pct }}%)</span>
-            </el-tag>
-          </span>
+        <div class="status-group">
+          <div v-if="detectionRunning && perfData" class="metric" :title="perfTooltip">
+            <span class="metric-label">推理</span>
+            <span class="metric-value">{{ perfData.inference_ms }}ms</span>
+          </div>
+          <StatusBadge
+            v-if="perfData"
+            :status="perfData.device === 'cuda:0' ? 'online' : perfData.device === 'mps' ? 'warning' : 'offline'"
+            :label="perfData.device === 'cuda:0' ? 'GPU' : perfData.device === 'mps' ? 'MPS' : 'CPU'"
+          />
           <el-tag
             v-if="uploadedFile"
             size="small"
-            type="warning"
             closable
             @close="clearUploadedFile"
+            class="file-tag"
           >
             {{ uploadedFile.name }}
           </el-tag>
         </div>
       </div>
-    </el-card>
+    </div>
 
+    <!-- Upload dialog -->
     <el-dialog
       v-model="showUpload"
       title="上传视频文件"
       width="420px"
       :close-on-click-modal="false"
+      class="upload-dialog"
     >
       <el-upload
         drag
@@ -131,20 +131,31 @@
         :auto-upload="false"
         :show-file-list="true"
         :on-change="onFileChange"
-        :limit="1"
+        :limit="10"
       >
-        <el-icon :size="48" class="upload-icon"><Upload /></el-icon>
-        <div class="upload-text">拖拽或点击选择视频文件</div>
+        <div class="upload-area">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <div class="upload-text">拖拽或点击选择视频文件</div>
+        </div>
         <template #tip>
           <div class="upload-tip">支持 MP4, AVI, MOV, MKV 格式，最大 100MB</div>
         </template>
       </el-upload>
+      <!-- Upload progress -->
+      <div v-if="uploadProgress > 0 && uploadProgress < 100" class="upload-progress">
+        <div class="upload-progress-label">上传中 {{ uploadProgress }}%</div>
+        <el-progress :percentage="uploadProgress" :stroke-width="6" :show-text="false" />
+      </div>
       <template #footer>
-        <el-button @click="showUpload = false">取消</el-button>
+        <el-button @click="showUpload = false; selectedFile = null">取消</el-button>
         <el-button
           type="primary"
+          :disabled="!selectedFile || uploadProgress > 0 || uploading"
           :loading="uploading"
-          :disabled="!selectedFile"
           @click="confirmUpload"
         >
           上传并启动检测
@@ -152,54 +163,59 @@
       </template>
     </el-dialog>
 
-    <el-card shadow="never" class="video-card">
-      <div class="video-container">
-        <transition name="fade" mode="out-in">
-          <div v-if="streamUrl" key="player" class="stream-wrapper">
-            <img
-              :src="streamUrl"
-              alt="检测画面实时视频流"
-              class="stream-image"
-              loading="eager"
-              decoding="async"
-              @error="onStreamError"
-            />
-          </div>
-          <div v-else key="placeholder" class="no-stream">
-            <el-icon :size="56" class="no-stream-icon"><VideoCamera /></el-icon>
-            <p>请选择检测源并启动检测</p>
-            <p class="no-stream-sub">支持摄像头实时检测和视频文件分析</p>
-          </div>
-        </transition>
-        <transition name="fade">
-          <div v-if="detectionRunning" class="live-badge">
-            <span class="live-dot"></span>
-            LIVE
-          </div>
-        </transition>
-      </div>
-    </el-card>
+    <!-- Stream player -->
+    <StreamPlayer
+      :stream-url="streamUrl"
+      :is-running="!!streamUrl && (detectionRunning || detectionLoading)"
+      placeholder-text="请选择检测源并启动检测"
+      @error="onStreamError"
+      @retry="retryStream"
+    />
 
+    <!-- MLLM Panel -->
     <el-card v-if="mllmData && mllmData.stats" shadow="never" class="mllm-card">
       <template #header>
         <div class="mllm-header">
-          <span class="mllm-title">MLLM 场景理解</span>
-          <el-tag
-            :type="mllmData.stats.enabled && mllmData.stats.running ? 'success' : mllmData.stats.enabled ? 'warning' : 'info'"
+          <div class="header-title-group">
+            <span class="mllm-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+              MLLM 场景理解
+            </span>
+          </div>
+          <StatusBadge
+            :status="mllmData.stats.enabled && mllmData.stats.running ? 'online' : mllmData.stats.enabled ? 'warning' : 'offline'"
+            :label="mllmData.stats.enabled && mllmData.stats.running ? '运行中' : mllmData.stats.enabled ? '已配置' : '未启用'"
+          />
+          <el-switch
+            v-if="mllmData"
+            :model-value="mllmData.stats.enabled"
             size="small"
-          >
-            {{ mllmData.stats.enabled && mllmData.stats.running ? '运行中' : mllmData.stats.enabled ? '已配置' : '未启用' }}
-          </el-tag>
+            active-text="开"
+            inactive-text="关"
+            @change="toggleMLLM"
+            class="mllm-toggle"
+          />
         </div>
       </template>
       <div v-if="mllmData.stats.enabled" class="mllm-content">
         <div v-if="!mllmData.stats.running" class="mllm-disabled">
-          <span class="stat-text">MLLM已配置，将在检测启动后运行（shadow mode）</span>
+          <span class="stat-text">MLLM已配置，将在检测启动后运行</span>
         </div>
         <div v-if="mllmData.stats.running" class="mllm-stats-row">
-          <span class="stat-text">场景描述: {{ mllmData.stats.scenes_described || 0 }}次</span>
-          <span class="stat-text">告警验证: {{ mllmData.stats.alarms_enhanced || 0 }}次</span>
-          <span class="stat-text">推理后端: {{ mllmData.stats.engine?.backend || 'none' }}</span>
+          <div class="mllm-stat">
+            <span class="mllm-stat-label">场景描述</span>
+            <span class="mllm-stat-value">{{ mllmData.stats.scenes_described || 0 }}次</span>
+          </div>
+          <div class="mllm-stat">
+            <span class="mllm-stat-label">告警验证</span>
+            <span class="mllm-stat-value">{{ mllmData.stats.alarms_enhanced || 0 }}次</span>
+          </div>
+          <div class="mllm-stat">
+            <span class="mllm-stat-label">推理后端</span>
+            <span class="mllm-stat-value">{{ mllmData.stats.engine?.backend || 'none' }}</span>
+          </div>
         </div>
         <div
           v-if="mllmData.stats.running && mllmData.stats.last_scene && mllmData.stats.last_scene.scene_summary"
@@ -214,10 +230,12 @@
                   : 'success'
             "
             size="small"
+            class="scene-tag"
           >
             {{ mllmData.stats.last_scene.activity_type }}
           </el-tag>
           <span class="mllm-summary">{{ mllmData.stats.last_scene.scene_summary }}</span>
+          <p v-if="mllmData.stats.last_scene.narrative" class="mllm-narrative">{{ mllmData.stats.last_scene.narrative }}</p>
         </div>
       </div>
       <div v-else class="mllm-disabled">
@@ -225,20 +243,34 @@
       </div>
     </el-card>
 
+    <!-- Events Panel -->
     <el-card shadow="never" class="events-card">
       <template #header>
         <div class="events-header">
-          <span class="events-title">实时事件</span>
+          <span class="events-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            实时事件
+          </span>
           <el-button size="small" text @click="loadEvents">
-            <el-icon><Refresh /></el-icon>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
+              <polyline points="23 4 23 10 17 10"/>
+              <polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
             刷新
           </el-button>
         </div>
       </template>
-      <el-table :data="recentEvents" size="small" max-height="200" stripe :show-header="true">
+      <el-table :data="recentEvents" size="small" max-height="200" stripe :show-header="true" class="events-table">
         <el-table-column prop="event_type" label="类型" width="110">
           <template #default="{ row }">
-            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="light">
+            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="dark" class="event-tag">
               {{ eventTypeLabel(row.event_type) }}
             </el-tag>
           </template>
@@ -260,34 +292,24 @@
 <script setup>
 /**
  * MonitorView.vue - Real-time detection monitoring page.
- *
- * Provides the primary user interface for the YOLO detection system:
- * - Camera/video source selection and switching
- * - Start/stop detection with loading state feedback
- * - Live MJPEG video stream display with auto-reconnect
- * - Real-time FPS, frame count, and event statistics
- * - WebSocket-based status updates (detection state, GPU info)
- * - Video file upload for offline detection
- * - MLLM (Multi-modal LLM) scene description panel
- *
- * State machine:
- *   idle → loading (启动中) → running (运行中) → idle
- *                ↓ error
- *               idle
  */
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Upload, Refresh, VideoPlay, VideoPause, VideoCamera } from '@element-plus/icons-vue'
+import { Upload, Refresh, VideoPlay, VideoPause, Loading } from '@element-plus/icons-vue'
 import { camerasAPI, detectionAPI, eventsAPI, mllmAPI } from '../api/client'
 import { logger } from '../utils/logger'
 import { useWebSocket } from '../composables/useWebSocket'
 import { eventTypeColor, formatTime, eventTypeLabel } from '../utils/helpers'
+import PageHeader from '../components/PageHeader.vue'
+import StreamPlayer from '../components/StreamPlayer.vue'
+import StatusBadge from '../components/StatusBadge.vue'
+import ActionButton from '../components/ActionButton.vue'
 
 const source = ref('0')
 const cameras = ref([])
 const detectionRunning = ref(false)
-const detectionLoading = ref(false)  // 摄像头/模型加载中状态
+const detectionLoading = ref(false)
 const switchingMode = ref(false)
 const streamUrl = ref('')
 const fps = ref(0)
@@ -296,19 +318,29 @@ const eventCount = ref(0)
 const recentEvents = ref([])
 const showUpload = ref(false)
 const uploadedFile = ref(null)
+const uploadedFiles = ref([])
 const uploading = ref(false)
 const selectedFile = ref(null)
 const starting = ref(false)
+const startupProgress = ref({ step: 'idle', message: '', percent: 0 })
+const uploadProgress = ref(0)
+let progressInterval = null
 const _streamCounter = ref(0)
 const perfData = ref(null)
 const gpuStatus = ref(null)
 const mllmData = ref(null)
-const POLL_INTERVAL = 3000  // 优化：从5秒减少到3秒，更快响应状态变化
+const POLL_INTERVAL = 3000
 
 const { wsConnected, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket()
 
 let statusInterval = null
 const route = useRoute()
+
+const formatNumber = (n) => {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return String(n)
+}
 
 const perfTooltip = computed(() => {
   if (!perfData.value) return ''
@@ -321,16 +353,43 @@ const perfTooltip = computed(() => {
   return tip
 })
 
-const gpuMemTagType = computed(() => {
-  if (!gpuStatus.value) return 'info'
-  const pressure = gpuStatus.value.gpu_memory_pressure
-  if (pressure === 'critical') return 'danger'
-  if (pressure === 'high') return 'warning'
-  if (pressure === 'medium') return 'info'
-  return 'success'
+const fpsClass = computed(() => {
+  if (fps.value >= 25) return 'fps-good'
+  if (fps.value >= 15) return 'fps-warn'
+  return 'fps-low'
 })
 
 let mjpegRetryTimer = null
+let mjpegRetryCount = 0
+const MAX_RETRY_COUNT = 5
+const BASE_RETRY_DELAY = 1000
+
+const retryStream = () => {
+  if (detectionRunning.value || detectionLoading.value) {
+    _streamCounter.value++
+    streamUrl.value = `/api/detection/stream.mjpg?_=${_streamCounter.value}&t=${Date.now()}`
+  }
+}
+
+const scheduleRetry = () => {
+  if (mjpegRetryTimer) {
+    clearTimeout(mjpegRetryTimer)
+  }
+  if (mjpegRetryCount >= MAX_RETRY_COUNT) {
+    ElMessage.error('视频流重试次数已达上限，请检查后端服务或手动刷新页面')
+    mjpegRetryCount = 0
+    return
+  }
+  const delay = BASE_RETRY_DELAY * Math.pow(2, mjpegRetryCount)
+  mjpegRetryCount++
+  mjpegRetryTimer = setTimeout(() => {
+    if (detectionRunning.value || detectionLoading.value) {
+      _streamCounter.value++
+      streamUrl.value = `/api/detection/stream.mjpg?_=${_streamCounter.value}&t=${Date.now()}`
+    }
+    mjpegRetryTimer = null
+  }, delay)
+}
 
 const onSourceChange = async (val) => {
   if (val === 'file') {
@@ -340,7 +399,6 @@ const onSourceChange = async (val) => {
     showUpload.value = true
     return
   }
-  // Switching to a camera source: clear stale uploaded file state
   uploadedFile.value = null
   selectedFile.value = null
   if (detectionRunning.value) {
@@ -367,19 +425,34 @@ const confirmUpload = async () => {
     return
   }
   uploading.value = true
+  uploadProgress.value = 0
   try {
-    const res = await detectionAPI.uploadVideo(selectedFile.value)
-    // 先更新 source 再更新 uploadedFile，防止 onSourceChange 清空 uploadedFile
+    const res = await detectionAPI.uploadVideo(selectedFile.value, (percent) => {
+      uploadProgress.value = percent
+    })
+    if (res.status === 'error') {
+      ElMessage.error('上传失败: ' + (res.message || '服务器拒绝该文件'))
+      uploadProgress.value = 0
+      uploading.value = false
+      return
+    }
+    const fileInfo = { name: selectedFile.value.name, path: res.path }
     source.value = res.path
-    uploadedFile.value = { name: selectedFile.value.name, path: res.path }
+    uploadedFile.value = fileInfo
+    if (!uploadedFiles.value.find(f => f.path === res.path)) {
+      uploadedFiles.value.push(fileInfo)
+    }
     showUpload.value = false
-    ElMessage.success('文件上传成功')
+    selectedFile.value = null
+    uploadProgress.value = 0
+    uploading.value = false
+    ElMessage.success('上传成功，正在启动检测...')
     await startDetection()
   } catch (e) {
-    ElMessage.error('文件上传失败：' + (e.response?.data?.detail || '请检查文件格式'))
-    logger.error('Upload failed:', e)
-  } finally {
+    uploadProgress.value = 0
     uploading.value = false
+    const msg = e?.response?.data?.message || e?.message || '上传失败，请检查网络和文件大小（最大 100MB）'
+    ElMessage.error(msg)
   }
 }
 
@@ -390,14 +463,8 @@ const startDetection = async () => {
   
   try {
     if (detectionRunning.value) {
-      // 切换模式：先停止当前检测
       switchingMode.value = true
       ElMessage.info('正在切换模式...')
-      
-      // 先清空流 URL，立即消除视觉残留
-      streamUrl.value = ''
-      
-      // 停止当前检测
       logger.log('Stopping current detection...')
       const stopRes = await detectionAPI.stop()
       if (stopRes.status !== 'stopped') {
@@ -407,11 +474,9 @@ const startDetection = async () => {
         switchingMode.value = false
         return
       }
+      streamUrl.value = ''
       logger.log('Current detection stopped successfully')
-      
-      // 等待 300ms 确保资源释放（减少等待时间）
       await new Promise(resolve => setTimeout(resolve, 300))
-      
       detectionRunning.value = false
     }
     
@@ -419,49 +484,40 @@ const startDetection = async () => {
     const src = uploadedFile.value ? uploadedFile.value.path : source.value
     logger.log('Starting detection on source:', src)
     
-    // 显示加载提示，让用户知道系统正在工作
     loadingMsg = ElMessage({
       message: '正在启动检测，请稍候...',
       type: 'info',
-      duration: 0, // 不自动关闭
+      duration: 0,
       showClose: false,
     })
     
     const res = await detectionAPI.start(src)
     
     if (res.status === 'started') {
-      // 不立即设置为运行中，而是设置为加载中，等待后端确认
       detectionLoading.value = true
+      startupProgress.value = { step: 'init', message: '正在初始化检测...', percent: 5 }
       _streamCounter.value++
-      // 强制刷新流，添加随机参数避免缓存
       streamUrl.value = `/api/detection/stream.mjpg?_=${_streamCounter.value}&t=${Date.now()}`
       connectWebSocket()
       
-      // 关闭加载提示
       if (loadingMsg) loadingMsg.close()
       logger.log('Detection started, waiting for pipeline to be ready...', src)
-
-      // 延迟验证：确认管线真正启动成功（模型加载 + 摄像头打开需要时间）
+      _startProgressPolling()
       _verifyStartup(src)
     } else {
-      // 关闭加载提示，显示错误消息
       if (loadingMsg) loadingMsg.close()
       const errorMsg = '启动检测失败：' + (res.message || '后端返回错误')
       logger.error('Start detection failed:', res)
       ElMessage.error(errorMsg)
     }
   } catch (e) {
-    // 关闭加载提示（如果还在显示）
     if (loadingMsg) loadingMsg.close()
     logger.error('Failed to start detection:', e)
     const errorDetail = e.response?.data?.detail || '请检查后端服务'
-
-    // Check if this might be a camera-related failure
     const cameraKeywords = ['摄像头', '相机', 'camera', 'video source', '视频源', '无法打开']
     const isCameraError = cameraKeywords.some(kw =>
       errorDetail.toLowerCase().includes(kw.toLowerCase())
     )
-
     ElMessage.error({
       message: isCameraError
         ? '摄像头初始化失败：' + errorDetail + '\n请检查：1.摄像头连接 2.Windows隐私设置 3.设备管理器'
@@ -475,34 +531,49 @@ const startDetection = async () => {
   }
 }
 
+const _startProgressPolling = () => {
+  if (progressInterval) clearInterval(progressInterval)
+  progressInterval = setInterval(async () => {
+    if (!detectionLoading.value) {
+      clearInterval(progressInterval)
+      progressInterval = null
+      return
+    }
+    try {
+      const progress = await detectionAPI.progress()
+      if (progress && progress.step) {
+        startupProgress.value = progress
+      }
+    } catch (e) {
+      // ignore progress fetch errors
+    }
+  }, 1200)
+}
+
+const _stopProgressPolling = () => {
+  if (progressInterval) {
+    clearInterval(progressInterval)
+    progressInterval = null
+  }
+  startupProgress.value = { step: 'idle', message: '', percent: 0 }
+}
+
 const onStreamError = async (e) => {
   logger.error('Stream error:', e)
-  if (detectionRunning.value) {
-    // 重试前先验证检测是否仍在运行
+  if (detectionRunning.value || detectionLoading.value) {
     try {
       const status = await detectionAPI.status()
       if (!status.running) {
         logger.log('Stream error but detection already stopped, not retrying')
         detectionRunning.value = false
+        detectionLoading.value = false
         streamUrl.value = ''
+        mjpegRetryCount = 0
         return
       }
-    } catch (_) {
-      // 网络错误时暂不处理，继续重试
-    }
+    } catch (_) {}
 
-    // 清除旧的重试定时器
-    if (mjpegRetryTimer) {
-      clearTimeout(mjpegRetryTimer)
-    }
-    // 延迟重试加载 MJPEG 流
-    mjpegRetryTimer = setTimeout(() => {
-      if (detectionRunning.value) {
-        _streamCounter.value++
-        streamUrl.value = `/api/detection/stream.mjpg?_=${_streamCounter.value}&t=${Date.now()}`
-      }
-      mjpegRetryTimer = null
-    }, 1000)
+    scheduleRetry()
     ElMessage.warning('视频流中断，正在尝试恢复...')
   }
 }
@@ -513,9 +584,11 @@ const stopDetection = async () => {
     const res = await detectionAPI.stop()
     if (res.status === 'stopped') {
       detectionRunning.value = false
+      detectionLoading.value = false
       streamUrl.value = ''
       uploadedFile.value = null
       selectedFile.value = null
+      _stopProgressPolling()
       disconnectWebSocket()
       ElMessage.info('检测已停止')
       logger.log('Detection stopped successfully')
@@ -536,7 +609,6 @@ const handleWebSocketMessage = (msg) => {
         const status = msg.data
         if ((detectionLoading.value || detectionRunning.value) && !status.running) {
           if (status.state === 'loading' || status.state === 'loading_timeout') {
-            // 仍在加载中或加载中超时，保持状态
           } else {
             if (status.last_error) {
               ElMessage.error('检测异常停止: ' + status.last_error)
@@ -548,17 +620,17 @@ const handleWebSocketMessage = (msg) => {
             uploadedFile.value = null
             selectedFile.value = null
             streamUrl.value = ''
+            _stopProgressPolling()
           }
         }
-        // 如果检测到真正运行（非loading状态）
         if (status.running && !status.state) {
           detectionLoading.value = false
           detectionRunning.value = true
+          _stopProgressPolling()
         } else if (status.running && status.state === 'loading') {
           detectionLoading.value = true
           detectionRunning.value = false
         } else {
-          // 后端返回的 running 状态直接同步
           detectionRunning.value = status.running
         }
         fps.value = status.fps || 0
@@ -647,12 +719,23 @@ const fetchMLLMStatus = async () => {
   }
 }
 
+const toggleMLLM = async (enabled) => {
+  try {
+    const res = await mllmAPI.enable(enabled, true)
+    if (res.status === 'ok') {
+      ElMessage.success(enabled ? 'AI 场景理解已开启' : 'AI 场景理解已关闭')
+      fetchMLLMStatus()
+    }
+  } catch (e) {
+    ElMessage.error('切换 MLLM 状态失败')
+  }
+}
+
 const pollStatus = async () => {
   try {
     const status = await detectionAPI.status()
     if ((detectionLoading.value || detectionRunning.value) && !status.running) {
       if (status.state === 'loading' || status.state === 'loading_timeout') {
-        // 仍在加载中或加载中超时，保持状态
       } else {
         if (status.last_error) {
           ElMessage.error('检测异常停止: ' + status.last_error)
@@ -664,9 +747,9 @@ const pollStatus = async () => {
         uploadedFile.value = null
         selectedFile.value = null
         streamUrl.value = ''
+        _stopProgressPolling()
       }
     } else if (status.running && status.warning) {
-      // 摄像头启动超时
       ElMessage.error({
         message: '摄像头初始化超时: ' + (status.warning || '请检查摄像头连接和权限设置'),
         duration: 10000,
@@ -676,20 +759,18 @@ const pollStatus = async () => {
       uploadedFile.value = null
       selectedFile.value = null
       streamUrl.value = ''
+      _stopProgressPolling()
     } else if (status.running && !status.state) {
-      // 管线已就绪，真正运行
       detectionLoading.value = false
       detectionRunning.value = true
     } else if (status.running && status.state === 'loading') {
-      // 仍在加载中
       detectionLoading.value = true
       detectionRunning.value = false
     } else {
-      // 后端返回的 running 状态直接同步
       detectionRunning.value = status.running
     }
-    fps.value = status.fps
-    frameCount.value = status.frame_count
+    fps.value = status.fps ?? 0
+    frameCount.value = status.frame_count ?? 0
     if (status.performance) {
       perfData.value = status.performance
     }
@@ -698,25 +779,23 @@ const pollStatus = async () => {
   }
 }
 
-// 启动后延迟验证：避免"返回 started 但线程实际启动失败"的静默假死
 let _startupTimer = null
 function _verifyStartup(src, delayMs = 3000) {
   if (_startupTimer) clearTimeout(_startupTimer)
   _startupTimer = setTimeout(async () => {
-    if (!detectionLoading.value && !detectionRunning.value) return // 用户已手动停止
+    if (!detectionLoading.value && !detectionRunning.value) return
     try {
       const st = await detectionAPI.status()
       if (!st.running && st.last_error) {
-        // 启动失败：有错误信息
         ElMessage.error('检测启动失败: ' + st.last_error)
         detectionLoading.value = false
         detectionRunning.value = false
         streamUrl.value = ''
         uploadedFile.value = null
         selectedFile.value = null
+        _stopProgressPolling()
         return
       }
-      // Detect stuck "loading" state (camera hung but thread alive)
       if (st.running && (st.state === 'loading_timeout' || st.warning)) {
         ElMessage.error({
           message: '摄像头初始化超时: ' + (st.warning || '请检查摄像头连接和权限设置'),
@@ -727,6 +806,7 @@ function _verifyStartup(src, delayMs = 3000) {
         streamUrl.value = ''
         uploadedFile.value = null
         selectedFile.value = null
+        _stopProgressPolling()
         return
       }
       if (st.running && st.last_error) {
@@ -736,15 +816,14 @@ function _verifyStartup(src, delayMs = 3000) {
         streamUrl.value = ''
         uploadedFile.value = null
         selectedFile.value = null
+        _stopProgressPolling()
         return
       }
-      // 如果还没 running 但也没 error（模型还在加载），再等一会
       if (!st.running && !st.last_error) {
         _startupTimer = setTimeout(async () => {
           if (!detectionRunning.value) return
           try {
             const st2 = await detectionAPI.status()
-            // Check for loading_timeout on second attempt
             if (st2.running && (st2.state === 'loading_timeout' || st2.warning)) {
               ElMessage.error({
                 message: '摄像头初始化超时: ' + (st2.warning || '请检查摄像头连接和权限设置'),
@@ -772,7 +851,6 @@ onMounted(async () => {
   await pollStatus()
   await loadCameras()
 
-  // 如果检测仍在运行或加载中（页面切换回来时），恢复 MJPEG 流
   if ((detectionRunning.value || detectionLoading.value) && !streamUrl.value) {
     _streamCounter.value++
     streamUrl.value = `/api/detection/stream.mjpg?_=${_streamCounter.value}&t=${Date.now()}`
@@ -797,29 +875,33 @@ onMounted(async () => {
 
   connectWebSocket()
 
-  // 优化：使用 requestAnimationFrame 调度，避免后台标签页浪费资源
   let _pollTimer = null
   const _schedulePoll = () => {
     _pollTimer = setTimeout(() => {
-      // 页面可见时才执行轮询
       if (!document.hidden) {
-        pollStatus()
         if (!wsConnected.value) {
+          pollStatus()
           loadEvents()
           fetchMLLMStatus()
+        } else {
+          loadEvents()
         }
       }
       _schedulePoll()
     }, POLL_INTERVAL)
   }
   _schedulePoll()
-  
-  // 保存清理函数
+
   statusInterval = { cleanup: () => { if (_pollTimer) clearTimeout(_pollTimer) } }
+
+  // Reset retry count on successful load
+  const img = document.querySelector('.stream-img')
+  if (img) {
+    img.addEventListener('load', () => { mjpegRetryCount = 0 })
+  }
 })
 
 onUnmounted(() => {
-  // 优化：兼容新的定时器清理方式
   if (statusInterval) {
     if (typeof statusInterval.cleanup === 'function') {
       statusInterval.cleanup()
@@ -848,162 +930,104 @@ onUnmounted(() => {
   gap: 16px;
   max-width: 1400px;
   margin: 0 auto;
-}
-
-.control-card {
-  flex-shrink: 0;
-}
-
-.control-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.control-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
 }
 
 .source-select {
   width: 200px;
 }
 
+/* Status bar */
 .status-bar {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  transition: all var(--transition-fast);
+}
+
+.status-bar:hover {
+  border-color: var(--border-default);
+}
+
+.status-section {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.fps-badge {
-  color: var(--primary-color);
-  font-weight: 700;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-
-.fps-badge.fps-warn {
-  color: #e6a23c;
-}
-
-.fps-badge.fps-low {
-  color: #f56c6c;
-}
-
-.stat-text {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.perf-text {
-  cursor: help;
-  border-bottom: 1px dashed var(--text-secondary);
-}
-
-.video-card {
-  flex: 1;
-  min-height: 0;
-}
-
-.video-container {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #0d0d0d;
-  border-radius: var(--radius-md);
-  overflow: hidden;
+.status-group {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.stream-wrapper {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stream-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.no-stream {
-  text-align: center;
-  color: #666;
-}
-
-.no-stream-icon {
-  color: #444;
-  margin-bottom: 12px;
-}
-
-.no-stream p {
-  font-size: 15px;
-  margin-top: 4px;
-}
-
-.no-stream-sub {
-  font-size: 13px;
-  color: #555;
-  margin-top: 4px !important;
-}
-
-.live-badge {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  background: rgba(255, 0, 0, 0.85);
-  color: white;
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1px;
+.metric {
   display: flex;
   align-items: center;
   gap: 6px;
-  backdrop-filter: blur(4px);
 }
 
-.live-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: white;
-  animation: pulse 1.5s infinite;
+.metric-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
+.metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.gpu-mem-stat {
-  cursor: help;
+.metric-value.fps-good {
+  color: var(--color-success);
 }
 
-.events-card {
-  flex-shrink: 0;
+.metric-value.fps-warn {
+  color: var(--color-warning);
 }
 
-.mllm-card {
-  flex-shrink: 0;
+.metric-value.fps-low {
+  color: var(--color-danger);
+}
+
+.file-tag {
+  background: rgba(245, 158, 11, 0.1) !important;
+  color: var(--color-warning) !important;
+  border: 1px solid rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Upload dialog */
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+}
+
+.upload-text {
+  font-size: 14px;
+  color: var(--text-regular);
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* MLLM card */
+.mllm-card :deep(.el-card__header) {
+  padding: 12px 16px;
 }
 
 .mllm-header {
@@ -1015,34 +1039,93 @@ onUnmounted(() => {
 .mllm-title {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.mllm-toggle {
+  margin-left: 8px;
 }
 
 .mllm-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .mllm-stats-row {
   display: flex;
-  gap: 16px;
+  gap: 24px;
   flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mllm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mllm-stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mllm-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .mllm-scene {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
+  padding: 12px;
+  background: var(--bg-root);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.scene-tag {
+  align-self: flex-start;
 }
 
 .mllm-summary {
   font-size: 13px;
+  color: var(--text-regular);
+  font-weight: 500;
+}
+
+.mllm-narrative {
+  font-size: 13px;
   color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--color-primary);
 }
 
 .mllm-disabled {
   text-align: center;
   padding: 8px 0;
+}
+
+.stat-text {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Events card */
+.events-card :deep(.el-card__header) {
+  padding: 12px 16px;
 }
 
 .events-header {
@@ -1053,97 +1136,116 @@ onUnmounted(() => {
 
 .events-title {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+}
+
+.events-table :deep(.el-tag) {
+  font-weight: 500;
 }
 
 .empty-events {
   padding: 8px 0;
 }
 
-.upload-icon {
-  color: var(--primary-color);
+/* Startup progress */
+.startup-progress {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 4px;
+  animation: fadeIn 0.3s ease;
 }
 
-.upload-text {
-  margin-top: 8px;
-  font-size: 14px;
-  color: var(--text-regular);
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.upload-tip {
+.progress-icon {
+  color: var(--color-primary);
+  animation: spin 1s linear infinite;
+}
+
+.progress-message {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.progress-percent {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
+.progress-bar :deep(.el-progress-bar__outer) {
+  background-color: var(--bg-elevated);
+  border-radius: var(--radius-sm);
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.progress-bar :deep(.el-progress-bar__inner) {
+  border-radius: var(--radius-sm);
+  transition: width 0.3s ease;
 }
 
-/* Responsive: Tablet */
+/* Upload progress */
+.upload-progress {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.upload-progress-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
 @media (max-width: 1024px) {
   .source-select {
     width: 180px;
   }
-
-  .video-container {
-    aspect-ratio: 16 / 10;
-  }
 }
 
-/* Responsive: Mobile */
 @media (max-width: 768px) {
-  .control-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .source-select {
     width: 100%;
   }
 
-  .control-left {
+  .status-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .status-group {
     width: 100%;
-  }
-
-  .control-left .el-button {
-    flex: 1;
-  }
-
-  .status-bar {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .video-container {
-    aspect-ratio: 4 / 3;
-  }
-
-  .stat-text {
-    font-size: 12px;
   }
 }
 
 @media (max-width: 480px) {
   .monitor-container {
     gap: 10px;
-  }
-
-  .fps-badge {
-    font-size: 12px;
-  }
-
-  .live-badge {
-    top: 8px;
-    left: 8px;
-    font-size: 11px;
-    padding: 2px 8px;
   }
 }
 </style>

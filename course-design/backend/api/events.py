@@ -1,5 +1,5 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 """Event query API endpoints using shared EventsStore singleton."""
 
@@ -28,6 +28,7 @@ def list_events(
     offset: int = Query(0, ge=0),
     start_time: float | None = Query(None, description="Start timestamp"),
     end_time: float | None = Query(None, description="End timestamp"),
+    search: str | None = Query(None, description="Text search in description and metadata"),
 ):
     """Query events with optional filters and pagination."""
     try:
@@ -38,6 +39,7 @@ def list_events(
             offset=offset,
             start_time=start_time,
             end_time=end_time,
+            search_text=search,
         )
         page = (offset // limit) + 1 if limit > 0 else 1
         total_pages = (total + limit - 1) // limit if limit > 0 else 1
@@ -54,7 +56,7 @@ def list_events(
         logger.error("Failed to query events: %s", exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to retrieve events: {type(exc).__name__}",
+            detail="Failed to retrieve events",
         ) from exc
 
 
@@ -107,8 +109,11 @@ def event_snapshot(event_id: int):
     path = row["snapshot_path"]
     resolved = Path(path).resolve()
     if not str(resolved).startswith(str(ALLOWED_SNAPSHOT_DIR)):
-        logger.warning("Snapshot path traversal attempt: %s", path)
-        raise HTTPException(status_code=403, detail="Access denied")
+        try:
+            _ = resolved.relative_to(ALLOWED_SNAPSHOT_DIR)
+        except ValueError:
+            logger.warning("Snapshot path traversal attempt: %s", path)
+            raise HTTPException(status_code=403, detail="Access denied") from None
     if not resolved.exists():
         raise HTTPException(status_code=404, detail="Snapshot file not found on disk")
     return FileResponse(str(resolved), media_type="image/jpeg")
