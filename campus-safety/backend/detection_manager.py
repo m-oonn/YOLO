@@ -687,7 +687,14 @@ class DetectionManager:
                     existing_pipeline = self._pipeline
                     self._pipeline = None
 
-            if existing_pipeline is not None and existing_pipeline.model is not None:
+            has_loaded_model = (
+                existing_pipeline is not None
+                and (
+                    existing_pipeline.model is not None
+                    or getattr(existing_pipeline, "_trt_model", None) is not None
+                )
+            )
+            if has_loaded_model:
                 with self._lock:
                     self._set_progress("model", "复用已加载的模型...", 20)
                 pipeline = existing_pipeline
@@ -712,9 +719,40 @@ class DetectionManager:
                 pipeline.rules = RulesEngine(cfg, person_class_id=PERSON_CLASS_ID)
                 pipeline._behavior_analyzer = BehaviorAnalyzer(cfg)
             else:
+                from core.model_preloader import get_model_preloader
+
+                preloader = get_model_preloader()
                 with self._lock:
-                    self._set_progress("model", "正在加载模型（首次启动需要 10-30 秒）...", 10)
-                pipeline = DetectionPipeline(cfg, store=store)
+                    if preloader.is_ready:
+                        self._set_progress("model", "使用预加载模型，正在初始化流水线...", 15)
+                    else:
+                        self._set_progress("model", "等待模型预加载完成...", 10)
+
+                t_pipeline = time.perf_counter()
+                preloaded = None
+                skip_warmup = False
+                if not (cfg.tensorrt.enabled):
+                    if preloader.wait_ready(timeout=120.0):
+                        preloaded = preloader.get_model(cfg.model_path)
+                        skip_warmup = preloaded is not None
+                        if preloaded:
+                            logger.info("Using preloaded YOLO model (preload timings: %s)", preloader.timings)
+                    else:
+                        logger.warning("Model preloader not ready within timeout, loading inline")
+
+                with self._lock:
+                    self._set_progress("model", "正在初始化检测流水线...", 20)
+                pipeline = DetectionPipeline(
+                    cfg,
+                    store=store,
+                    preloaded_model=preloaded,
+                    skip_warmup=skip_warmup,
+                )
+                logger.info(
+                    "DetectionPipeline created in %.0fms (preloaded=%s)",
+                    (time.perf_counter() - t_pipeline) * 1000,
+                    preloaded is not None,
+                )
 
             with self._lock:
                 self._pipeline = pipeline

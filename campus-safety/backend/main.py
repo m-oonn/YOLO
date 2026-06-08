@@ -97,9 +97,14 @@ ALLOWED_ORIGINS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting YOLO Course Design API")
-    _prewarm_model()  # Always pre-warm YOLO model to reduce first-start latency
+    _start_model_preload()
     yield
     logger.info("Shutting down YOLO Course Design API")
+    try:
+        from core.model_preloader import get_model_preloader
+        get_model_preloader().release()
+    except Exception:
+        pass
     try:
         from backend.alarm_singleton import close_alarm_engine
         close_alarm_engine()
@@ -108,33 +113,16 @@ async def lifespan(app: FastAPI):
     close_store()
 
 
-def _prewarm_model():
-    """Pre-load YOLO model in background to warm CUDA JIT compiler cache.
+def _start_model_preload():
+    """Pre-load and warm YOLO model at app startup (shared singleton).
 
-    Runs on a daemon thread during app startup so the model and CUDA kernels
-    are already hot when the user clicks 'start detection', reducing first-
-    frame latency from ~5s to ~0.1s.
+    The model is loaded once in a background thread and reused when detection
+    starts, avoiding duplicate load + CUDA JIT compile on every detection start.
     """
-    logger.info("Pre-warming YOLO model (background thread)...")
-    def _warm():
-        from core.config import load_config
-        from ultralytics import YOLO
-        import numpy as np
-        try:
-            cfg = load_config()
-            model = YOLO(cfg.model_path)
-            model.eval()
-            model.predict(
-                np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8),
-                imgsz=640, device="cuda" if cfg.device != "cpu" else "cpu",
-                verbose=False, half=cfg.half,
-            )
-            logger.info("Model pre-warm complete (CUDA kernels compiled).")
-        except Exception as e:
-            logger.warning("Model pre-warm failed (non-fatal): %s", e)
-    import threading
-    t = threading.Thread(target=_warm, daemon=True)
-    t.start()
+    from core.model_preloader import get_model_preloader
+
+    logger.info("Starting YOLO model preload (background thread)...")
+    get_model_preloader().start_background()
 
 
 app = FastAPI(

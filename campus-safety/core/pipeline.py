@@ -118,7 +118,14 @@ def _deduplicate_events(events: list[Event]) -> list[Event]:
 class DetectionPipeline:
     """Main pipeline for real-time object detection and behavior analysis."""
 
-    def __init__(self, cfg: AppConfig, store: EventsStore | None = None):
+    def __init__(
+        self,
+        cfg: AppConfig,
+        store: EventsStore | None = None,
+        preloaded_model: Any | None = None,
+        skip_warmup: bool = False,
+    ):
+        t_init = time.perf_counter()
         self.cfg = cfg
         self.running = False
         self._frame_count = 0
@@ -128,6 +135,7 @@ class DetectionPipeline:
         self._skeletons: list[Skeleton] = []
         self._skeleton_enabled = cfg.pose.enabled
         self._current_source: str | None = None
+        self._mllm_sidecar = None
 
         self._sk_process_interval = max(1, min(10, cfg.pose.process_interval))
         self._sk_frame_counter = 0
@@ -149,10 +157,33 @@ class DetectionPipeline:
             max_workers=1, thread_name_prefix="snapshot"
         )
 
+        # Resolve GPU device before any model loading
+        t0 = time.perf_counter()
+        self._gpu_mgr = GPUManager()
+        self._device = self._gpu_mgr.resolve_device(cfg.device)
+        self._half = cfg.half or self._gpu_mgr.should_use_half(self._device)
+        self._use_gpu_preprocess = self._gpu_mgr.is_cuda and self._half
+        logger.info(
+            "Device resolved in %.0fms: device=%s half=%s cuda=%s",
+            (time.perf_counter() - t0) * 1000,
+            self._device,
+            self._half,
+            self._gpu_mgr.is_cuda,
+        )
+
+        if self._gpu_mgr.is_cuda:
+            try:
+                torch.cuda.set_per_process_memory_fraction(0.8, 0)
+                logger.info("CUDA memory fraction set to 80%% to prevent OOM")
+            except Exception as e:
+                logger.debug("Could not set CUDA memory fraction: %s", e)
+
         # TensorRT mode check
         self._use_tensorrt = cfg.tensorrt.enabled and is_tensorrt_available()
         self._trt_model = None
+        self.model = None
 
+        t0 = time.perf_counter()
         if self._use_tensorrt:
             logger.info(f"TensorRT mode enabled, loading engine for: {cfg.model_path}")
             try:
@@ -170,24 +201,38 @@ class DetectionPipeline:
                     classes=cfg.classes if cfg.classes else None,
                     device=self._device,
                 )
-                self.model = None  # Don't load PyTorch model
-                logger.info(f"TensorRT engine loaded: {engine_path}")
+                logger.info(
+                    "TensorRT engine loaded in %.0fms: %s",
+                    (time.perf_counter() - t0) * 1000,
+                    engine_path,
+                )
             except Exception as e:
                 logger.warning(f"TensorRT initialization failed: {e}, falling back to PyTorch")
                 self._use_tensorrt = False
                 self._trt_model = None
 
         if not self._use_tensorrt:
-            logger.info(f"Loading PyTorch model: {cfg.model_path}")
-            self.model = YOLO(cfg.model_path)
-            self.model.eval()
+            if preloaded_model is not None:
+                self.model = preloaded_model
+                logger.info(
+                    "Reusing preloaded PyTorch model in %.0fms: %s",
+                    (time.perf_counter() - t0) * 1000,
+                    cfg.model_path,
+                )
+            else:
+                logger.info(f"Loading PyTorch model: {cfg.model_path}")
+                self.model = YOLO(cfg.model_path)
+                self.model.eval()
+                logger.info(
+                    "PyTorch model loaded in %.0fms",
+                    (time.perf_counter() - t0) * 1000,
+                )
 
-        self._fall_model = self._load_secondary_model(
-            cfg.fall_model_path, "fall posture"
-        )
-        self._fight_model = self._load_secondary_model(
-            cfg.fight_model_path, "fight detection"
-        )
+        # Secondary models: lazy-loaded on first use to speed up startup
+        self._fall_model_path = cfg.fall_model_path
+        self._fight_model_path = cfg.fight_model_path
+        self._fall_model: YOLO | None = None
+        self._fight_model: YOLO | None = None
         self._model_secondary_frame_skip = 3
         self._mllm_frame_skip = 5
         self._mllm_frame_counter = 0
@@ -195,25 +240,14 @@ class DetectionPipeline:
         self._stream_frame_counter = 0
         self._runtime = RuntimeSettings(cfg)
 
-        self._gpu_mgr = GPUManager()
-        self._device = self._gpu_mgr.resolve_device(cfg.device)
-        self._half = cfg.half or self._gpu_mgr.should_use_half(self._device)
-        self._use_gpu_preprocess = self._gpu_mgr.is_cuda and self._half
-        logger.info(
-            f"Using device: {self._device}, half precision: {self._half}, "
-            f"GPU preprocess: {self._use_gpu_preprocess}"
-        )
+        if not skip_warmup:
+            t0 = time.perf_counter()
+            self._warmup_model()
+            logger.info("Model warmup completed in %.0fms", (time.perf_counter() - t0) * 1000)
+        else:
+            logger.info("Skipping model warmup (preloaded model already warmed)")
 
-        if self._gpu_mgr.is_cuda:
-            try:
-                torch.cuda.set_per_process_memory_fraction(0.8, 0)
-                logger.info("CUDA memory fraction set to 80%% to prevent OOM")
-            except Exception as e:
-                logger.debug("Could not set CUDA memory fraction: %s", e)
-
-        self._warmup_model()
-
-        logger.info("Model loaded and warmed up successfully")
+        logger.info("Pipeline init total: %.0fms", (time.perf_counter() - t_init) * 1000)
 
         self.rules = RulesEngine(cfg, person_class_id=PERSON_CLASS_ID)
 
@@ -232,13 +266,28 @@ class DetectionPipeline:
         os.makedirs(cfg.snapshots_dir, exist_ok=True)
 
         self._init_alarm_engine()
-        self._init_mllm_sidecar()
+        if cfg.mllm.enabled:
+            self._init_mllm_sidecar()
+        else:
+            logger.info("MLLM sidecar deferred (disabled in config)")
 
         self._clip_recorder = VideoClipRecorder(
             pre_seconds=8, post_seconds=4, clip_fps=15,
             output_dir=os.path.join(cfg.output_dir, "clips"),
         )
         logger.info("Video clip recorder initialized")
+
+    def _ensure_fall_model(self) -> YOLO | None:
+        if self._fall_model is not None:
+            return self._fall_model
+        self._fall_model = self._load_secondary_model(self._fall_model_path, "fall posture")
+        return self._fall_model
+
+    def _ensure_fight_model(self) -> YOLO | None:
+        if self._fight_model is not None:
+            return self._fight_model
+        self._fight_model = self._load_secondary_model(self._fight_model_path, "fight detection")
+        return self._fight_model
 
     @staticmethod
     def _load_secondary_model(path: str, name: str) -> YOLO | None:
@@ -247,8 +296,13 @@ class DetectionPipeline:
             logger.info(f"Secondary model '{name}': not found ({path})")
             return None
         try:
+            t0 = time.perf_counter()
             model = YOLO(path, task="detect")
-            logger.info(f"Secondary model '{name}': loaded")
+            logger.info(
+                "Secondary model '%s': loaded in %.0fms",
+                name,
+                (time.perf_counter() - t0) * 1000,
+            )
             return model
         except Exception as e:
             logger.warning(f"Secondary model '{name}': load failed ({e})")
@@ -256,7 +310,8 @@ class DetectionPipeline:
 
     def _classify_posture(self, frame, detections):
         """Run fall posture model on person bbox crops."""
-        if self._fall_model is None or not detections:
+        fall_model = self._ensure_fall_model()
+        if fall_model is None or not detections:
             return []
         results = []
         for i, d in enumerate(detections):
@@ -270,12 +325,12 @@ class DetectionPipeline:
             if crop.size == 0:
                 continue
             try:
-                preds = self._fall_model(crop, imgsz=640, verbose=False, device=self._device)
+                preds = fall_model(crop, imgsz=640, verbose=False, device=self._device)
                 if preds and preds[0].boxes and len(preds[0].boxes) > 0:
                     best = preds[0].boxes.conf.argmax()
                     results.append((
                         i,
-                        self._fall_model.names.get(int(preds[0].boxes.cls[best].item()), "?"),
+                        fall_model.names.get(int(preds[0].boxes.cls[best].item()), "?"),
                         float(preds[0].boxes.conf[best].item()),
                     ))
             except Exception as e:
@@ -284,14 +339,15 @@ class DetectionPipeline:
 
     def _detect_fight_model(self, frame):
         """Run fight model on full frame, return violence detections."""
-        if self._fight_model is None:
+        fight_model = self._ensure_fight_model()
+        if fight_model is None:
             return []
         dets = []
         try:
-            preds = self._fight_model(frame, imgsz=640, verbose=False, device=self._device)
+            preds = fight_model(frame, imgsz=640, verbose=False, device=self._device)
             if preds and preds[0].boxes and len(preds[0].boxes) > 0:
                 for box in preds[0].boxes:
-                    cls_name = self._fight_model.names.get(int(box.cls.item()), "").lower()
+                    cls_name = fight_model.names.get(int(box.cls.item()), "").lower()
                     xyxy = box.xyxy[0].tolist()
                     conf = float(box.conf.item())
                     dets.append({
@@ -312,18 +368,27 @@ class DetectionPipeline:
             logger.warning("Alarm engine not available: %s", e)
 
     def _init_mllm_sidecar(self) -> None:
+        """Initialize MLLM sidecar only when explicitly enabled."""
+        if not self.cfg.mllm.enabled:
+            return
         try:
             from core.mllm.mllm_sidecar import MLLMSidecar
 
             self._mllm_sidecar = MLLMSidecar(self.cfg.mllm)
-            if self.cfg.mllm.enabled:
-                self._mllm_sidecar.initialize()
-                logger.info("MLLM sidecar integrated into pipeline")
-            else:
-                logger.info("MLLM sidecar disabled")
+            self._mllm_sidecar.initialize()
+            logger.info("MLLM sidecar integrated into pipeline")
         except Exception as e:
             logger.warning("MLLM sidecar not available: %s", e)
             self._mllm_sidecar = None
+
+    def enable_mllm(self) -> bool:
+        """Lazy-enable MLLM at runtime (loads model on demand)."""
+        if self._mllm_sidecar is not None:
+            return True
+        if not self.cfg.mllm.enabled:
+            return False
+        self._init_mllm_sidecar()
+        return self._mllm_sidecar is not None
 
     def process_frame(self, frame: np.ndarray, timestamp_s: float) -> dict[str, Any]:
         """Process a single frame: detect, track, extract skeletons, apply rules."""
@@ -859,6 +924,7 @@ class DetectionPipeline:
                     dummy,
                     imgsz=self.cfg.imgsz,
                     device=self._device,
+                    half=self._half,
                     verbose=False,
                 )
             logger.info("Model warmup completed (2 dummy inferences)")
@@ -894,6 +960,11 @@ class DetectionPipeline:
             self._mllm_sidecar._config = new_cfg.mllm
         if new_cfg.pose.enabled != self._skeleton_enabled:
             self._skeleton_enabled = new_cfg.pose.enabled
+        if new_cfg.mllm.enabled and self._mllm_sidecar is None:
+            self._init_mllm_sidecar()
+        elif not new_cfg.mllm.enabled and self._mllm_sidecar is not None:
+            self._mllm_sidecar.shutdown()
+            self._mllm_sidecar = None
         logger.info("Pipeline config updated at runtime")
 
     def set_jpeg_quality(self, quality: int) -> None:
