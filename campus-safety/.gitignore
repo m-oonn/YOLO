@@ -1,35 +1,88 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
-venv/
-.venv/
-
-# Outputs
-outputs/
-events.db
-*.mp4
-
-# Models
-models/*.pt
-
-# Node
-node_modules/
+.eggs/
 dist/
-frontend/dist/
+build/
+*.egg
+.venv/
+.venv-verify/
+venv/
+env/
+.Python
 
-# Test coverage
+# Test & coverage
+.pytest_cache/
+pytest-cache-files*/
 .coverage
 coverage.xml
 htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
 
-# IDE
+# Runtime outputs
+outputs/*
+!outputs/.gitkeep
+*.log
+logs/
+uploads/
+*.db
+events.db
+
+# Models & datasets (download separately)
+models/*
+!models/.gitkeep
+!models/README.md
+datasets/
+*.pt
+*.onnx
+*.engine
+*.trt
+*.weights
+*.safetensors
+
+# HuggingFace / ModelScope cache inside project
+models--*/
+.cache/
+hub/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+frontend/.env.local
+
+# IDE & OS
 .vscode/
 .idea/
-
-# Environment
-.env
-
-# OS
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Media (user-generated)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg
+*.jpeg
+*.png
+!docs/**/*.png
+
+# Docker
+.docker/
+
+# Personal / local tooling
+.claude/
+.cursor/

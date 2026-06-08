@@ -1,0 +1,125 @@
+# =============================================================================
+# Campus Safety — Example Configuration
+# Copy to configs/default.yaml and customize:
+#   cp config.example.yaml configs/default.yaml
+# =============================================================================
+
+# --- Camera / video input ---
+camera:
+  fps: 30          # Target capture FPS for live cameras
+  url: ''          # Optional RTSP/HTTP stream URL (empty = use numeric camera ID)
+
+# --- MLLM scene understanding (Qwen2-VL, lazy-loaded) ---
+mllm:
+  enabled: false                    # false = zero VRAM; enable via UI or API when needed
+  model_type: qwen2-vl-2b-instruct
+  model_path: Qwen/Qwen2-VL-2B-Instruct   # HuggingFace ID or local path
+  inference_backend: auto           # auto | pytorch | mock | tensorrt
+  half_precision: true              # FP16 on CUDA
+  use_flash_attention: true         # Requires flash-attn package
+  max_new_tokens: 128               # Limit output length for speed
+  max_frame_size: 384               # Downscale input image long edge (pixels)
+  min_inference_interval_s: 3.0     # Minimum seconds between MLLM calls
+  key_frame_interval: 30            # Run MLLM every N detection frames
+  scene_description_enabled: true
+  alarm_enhance_enabled: true
+  enhancement_cooldown_s: 10.0
+  shadow_mode: false                # true = log only, do not affect alarms
+
+# --- YOLO detection model ---
+model:
+  path: models/yolo12s.pt           # Relative to project root
+  device: cuda                      # cuda | cpu | auto (override with YOLO_DEVICE env)
+  half: true                        # FP16 inference on GPU
+  imgsz: 640                        # Inference resolution
+  conf: 0.25                        # Confidence threshold
+  iou: 0.50                         # NMS IoU threshold
+  inference_scale: 1.0              # 0.25–1.0, downscale frame before inference
+  jpeg_quality: 70                  # MJPEG stream quality (30–95)
+  tracker: bytetrack                # bytetrack | botsort
+  classes: null                     # null = all COCO classes; or list of class IDs
+
+# --- Output / storage ---
+output:
+  directory: outputs                # Events DB, snapshots, clips
+  save_snapshots: true
+  view: true
+
+# --- Pose / skeleton analysis ---
+pose:
+  enabled: true
+  model_path: models/yolo11n-pose.pt
+  kp_threshold: 0.4
+  max_skeletons: 30
+  process_interval: 3               # Extract skeleton every N frames
+  smoothing_alpha: 0.4
+
+# --- Behavior rules ---
+rules:
+  running:
+    enabled: true
+    speed_px_s: 350.0
+    min_duration_s: 0.4
+    debounce_s: 5.0
+  fall:
+    enabled: true
+    upright_aspect_min: 1.1
+    fallen_aspect_max: 0.95
+    transition_window_s: 2.0
+    debounce_s: 5.0
+    confirm_frames: 6
+    min_aspect_change_rate: 0.10
+  crowd:
+    enabled: true
+    min_people: 4
+    proximity_px: 180.0
+    debounce_s: 8.0
+    min_duration_s: 1.5
+  intrusion:
+    enabled: true
+    debounce_s: 5.0
+    zones: []                       # List of polygon zones [{name, polygon: [[x,y],...]}]
+    min_duration_s: 1.0
+  fight:
+    enabled: true
+    distance_threshold: 150
+    movement_threshold: 30
+    iou_threshold: 0.05
+    chaos_threshold: 60.0
+    min_duration_s: 0.6
+    debounce_s: 5.0
+    required_score: 4
+  vehicle:
+    enabled: false
+    zones: []
+    debounce_s: 10.0
+    min_duration_s: 2.0
+  skeleton:
+    running:
+      enabled: true
+      speed_threshold_kmh: 10.0
+      min_duration_s: 0.4
+      debounce_s: 5.0
+    fall:
+      enabled: true
+      torso_angle_threshold: 40.0
+      head_height_threshold: 0.3
+      fall_velocity_threshold: 0.4
+      emergency_velocity_px: 1.2
+      min_duration_s: 0.2
+      debounce_s: 8.0
+    fight:
+      enabled: true
+      proximity_threshold_m: 2.0
+      wrist_speed_threshold_ms: 1.5
+      limb_frequency_threshold: 2.5
+      min_duration_s: 0.4
+      debounce_s: 5.0
+    crowd:
+      enabled: true
+      density_threshold: 3.5
+      min_duration_s: 3.0
+      debounce_s: 8.0
+    intrusion:
+      enabled: true
+      debounce_s: 5.0

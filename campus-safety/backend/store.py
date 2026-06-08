@@ -11,15 +11,12 @@
 #   ③ 确保 pipeline 和 API 路由读写同一个事件数据库
 # ──────────────────────────────────────────────────────────
 
-"""Shared EventsStore singleton for cross-module access."""
+"""Shared EventsStore singleton for cross-module access.
 
 Provides a process-wide EventsStore instance that is lazily initialised
-on first access and reused for the lifetime of the application.  All API
+on first access and reused for the lifetime of the application. All API
 routers and the detection pipeline share the same store so that events
 written by the pipeline are immediately visible to the API layer.
-
-Functions:
-    get_store: Return the singleton EventsStore (creates it on first call).
 """
 
 from __future__ import annotations

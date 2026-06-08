@@ -11,14 +11,11 @@
 #   ③ 限流超限返回 HTTP 429 Too Many Requests
 # ──────────────────────────────────────────────────────────
 
-"""Shared rate limiter for the application."""
+"""Shared rate limiter for the application.
 
 Provides a global SlowAPI rate limiter instance that limits API requests
 to 60 per minute per client IP address by default. Individual routes can
 override the default limit via the ``@app_limiter.limit()`` decorator.
-
-Attributes:
-    app_limiter: SlowAPI Limiter instance bound to client IP addresses.
 """
 
 # Try to import slowapi, otherwise provide a dummy limiter
