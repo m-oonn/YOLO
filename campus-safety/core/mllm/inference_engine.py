@@ -37,6 +37,28 @@ from core.mllm.mllm_config import MLLMConfig
 logger = logging.getLogger(__name__)
 
 
+def _resize_frame_for_vlm(image: np.ndarray, max_size: int, min_size: int) -> np.ndarray:
+    """Downscale frame for VLM inference to reduce VRAM and latency."""
+    import cv2
+
+    h, w = image.shape[:2]
+    long_edge = max(h, w)
+    if long_edge <= max_size:
+        return image
+    scale = max_size / long_edge
+    new_w = max(min_size, int(w * scale))
+    new_h = max(min_size, int(h * scale))
+    return cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+
+def _supports_flash_attention() -> bool:
+    try:
+        import flash_attn  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 class BaseVLMBackend(ABC):
     @abstractmethod
     def load(self) -> None:
@@ -110,13 +132,13 @@ class PyTorchVLMBackend(BaseVLMBackend):
         self._cache_misses = 0
 
     def load(self) -> None:
-        """Load the PyTorch VLM model with optimizations."""
+        """Load Qwen2-VL-2B-Instruct with FP16 and optional Flash Attention 2."""
         try:
-            from transformers import Qwen2VLForConditionalGeneration
-            from transformers import AutoProcessor
+            import torch
+            from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
             model_path = self._config.model_path
-            logger.info(f"Loading PyTorch VLM model from: {model_path}")
+            logger.info("Loading Qwen2-VL model from: %s", model_path)
 
             device = self._config.device
             if device == "auto":
@@ -125,27 +147,34 @@ class PyTorchVLMBackend(BaseVLMBackend):
                 device = gm.resolve_device("auto")
 
             self._device = device
-            load_kwargs: dict[str, Any] = {"trust_remote_code": True}
-            if self._config.half_precision and device.startswith("cuda"):
-                load_kwargs["torch_dtype"] = "auto"
+            use_cuda = device.startswith("cuda")
+            use_fp16 = self._config.half_precision and use_cuda
+
+            load_kwargs: dict[str, Any] = {
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": True,
+            }
+            if use_fp16:
+                load_kwargs["torch_dtype"] = torch.float16
+            if self._config.use_flash_attention and use_cuda and _supports_flash_attention():
+                load_kwargs["attn_implementation"] = "flash_attention_2"
+                logger.info("Flash Attention 2 enabled for MLLM")
 
             self._processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
             self._model = Qwen2VLForConditionalGeneration.from_pretrained(model_path, **load_kwargs)
-
-            if device.startswith("cuda") and self._config.half_precision:
-                self._model = self._model.half()
-
             self._model = self._model.to(device)
             self._model.eval()
 
-            if hasattr(self._model, 'generate'):
-                logger.info("Model loaded, enabling optimizations")
-
             self._loaded = True
-            logger.info(f"PyTorch VLM loaded on {device}")
+            logger.info(
+                "Qwen2-VL loaded on %s (fp16=%s, flash_attn=%s)",
+                device,
+                use_fp16,
+                load_kwargs.get("attn_implementation") == "flash_attention_2",
+            )
 
         except Exception as e:
-            logger.error(f"Failed to load PyTorch VLM: {e}")
+            logger.error("Failed to load PyTorch VLM: %s", e)
             self._loaded = False
             raise
 
@@ -173,7 +202,15 @@ class PyTorchVLMBackend(BaseVLMBackend):
             image_pil = None
             if image is not None:
                 from PIL import Image
-                image_pil = Image.fromarray(image) if isinstance(image, np.ndarray) else image
+                if isinstance(image, np.ndarray):
+                    image = _resize_frame_for_vlm(
+                        image,
+                        self._config.max_frame_size,
+                        self._config.min_frame_size,
+                    )
+                    image_pil = Image.fromarray(image[:, :, ::-1] if image.shape[2] == 3 else image)
+                else:
+                    image_pil = image
 
             if image_pil:
                 from transformers import Qwen2VLImageProcessor
@@ -200,14 +237,16 @@ class PyTorchVLMBackend(BaseVLMBackend):
                 )
                 inputs = self._processor(text=[text], return_tensors="pt").to(self._device)
 
+            gen_kwargs: dict[str, Any] = {
+                "max_new_tokens": self._config.max_new_tokens,
+                "do_sample": self._config.temperature > 0,
+                "use_cache": True,
+            }
+            if self._config.temperature > 0:
+                gen_kwargs["temperature"] = self._config.temperature
+
             with torch.no_grad():
-                output_ids = self._model.generate(
-                    **inputs,
-                    max_new_tokens=self._config.max_new_tokens,
-                    temperature=self._config.temperature,
-                    do_sample=self._config.temperature > 0,
-                    use_cache=True,
-                )
+                output_ids = self._model.generate(**inputs, **gen_kwargs)
 
             generated_ids = output_ids[:, inputs.input_ids.shape[1]:]
             result = self._processor.batch_decode(
@@ -224,20 +263,27 @@ class PyTorchVLMBackend(BaseVLMBackend):
             return ""
 
     def unload(self) -> None:
-        """Unload the model and clear caches."""
+        """Unload the model and fully release GPU memory."""
+        import gc
+
+        if self._model is not None:
+            try:
+                del self._model
+            except Exception:
+                pass
         self._model = None
         self._processor = None
         self._generation_cache.clear()
         self._loaded = False
+        gc.collect()
         try:
             import torch
-            import gc
-
-            gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
         except Exception:
             pass
+        logger.info("PyTorch VLM unloaded, GPU cache cleared")
 
     @property
     def is_loaded(self) -> bool:
@@ -679,16 +725,20 @@ class MLLMInferenceEngine:
 
     def initialize(self) -> None:
         """Initialize the inference engine with backend selection."""
+        if self._backend is not None and self._backend.is_loaded:
+            return
         backend = self._resolve_backend()
         try:
             backend.load()
             self._backend = backend
             if self._use_batching:
-                self._batch_processor = BatchVLMProcessor(backend, max_batch_size=4, max_wait_ms=100.0)
+                self._batch_processor = BatchVLMProcessor(
+                    backend, max_batch_size=2, max_wait_ms=200.0
+                )
                 logger.info("Batch processing enabled for MLLM inference")
-            logger.info(f"MLLM inference engine initialized with {backend.backend_name}")
+            logger.info("MLLM inference engine initialized with %s", backend.backend_name)
         except Exception as e:
-            logger.error(f"Primary backend ({backend.backend_name}) failed: {e}")
+            logger.error("Primary backend (%s) failed: %s", backend.backend_name, e)
             if not isinstance(backend, MockVLMBackend):
                 logger.info("Falling back to MockVLMBackend")
                 mock = MockVLMBackend(self._config)
@@ -702,9 +752,13 @@ class MLLMInferenceEngine:
             return MockVLMBackend(self._config)
         if requested == "tensorrt":
             return TensorRTVLMBackend(self._config)
-        if requested == "pytorch":
+        if requested in ("pytorch", "auto"):
             return PyTorchVLMBackend(self._config)
         return PyTorchVLMBackend(self._config)
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._backend is not None and self._backend.is_loaded
 
     def generate(self, prompt: str, image: np.ndarray | None = None) -> str:
         """Generate response with comprehensive error handling.
@@ -749,10 +803,14 @@ class MLLMInferenceEngine:
 
     def shutdown(self) -> None:
         """Shutdown the inference engine and cleanup resources."""
+        if self._batch_processor is not None:
+            self._batch_processor.process_all()
+            self._batch_processor = None
         if self._backend:
             self._backend.unload()
             self._backend = None
         self._latencies.clear()
+        logger.info("MLLM inference engine shutdown complete")
 
     def get_stats(self) -> dict[str, Any]:
         """Get comprehensive inference statistics."""

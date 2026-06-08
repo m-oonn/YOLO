@@ -1,16 +1,6 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-# ──────────────────────────────────────────────────────────
-# 【后端API路由】mllm.py — MLLM状态查询端点
-# 上游依赖：core/mllm/mllm_sidecar.py（MLLM引擎状态）
-# 下游调用：前端（查询MLLM推理状态）
-# 路由前缀：/api/mllm
-# 核心端点：
-#   GET /status — MLLM启用状态/当前模型/最近推理结果
-#   POST /enable — 启用/禁用 MLLM（支持shadow_mode）
-# ──────────────────────────────────────────────────────────
-
 """MLLM API endpoints for scene understanding status and control."""
 
 from __future__ import annotations
@@ -30,16 +20,27 @@ router = APIRouter()
 
 class MLLMEnableRequest(BaseModel):
     enabled: bool = True
-    shadow_mode: bool = True
+    shadow_mode: bool = False
+
+
+def _gpu_memory_stats() -> dict:
+    try:
+        from core.gpu_manager import GPUManager
+        return GPUManager().get_status_dict()
+    except Exception:
+        return {}
 
 
 @router.get("/status")
 def get_mllm_status():
     pipeline = detection_manager.get_pipeline()
+    gpu = _gpu_memory_stats()
     if pipeline and hasattr(pipeline, "_mllm_sidecar") and pipeline._mllm_sidecar:
+        stats = pipeline._mllm_sidecar.get_stats()
         return {
             "available": True,
-            "stats": pipeline._mllm_sidecar.get_stats(),
+            "stats": stats,
+            "gpu": gpu,
         }
     try:
         from core.config import load_config
@@ -49,6 +50,7 @@ def get_mllm_status():
             "stats": {
                 "enabled": cfg.mllm.enabled,
                 "running": False,
+                "model_loaded": False,
                 "engine": {
                     "backend": cfg.mllm.inference_backend,
                     "loaded": False,
@@ -58,12 +60,14 @@ def get_mllm_status():
                 "alarms_enhanced": 0,
                 "last_scene": None,
             },
+            "gpu": gpu,
         }
     except Exception:
         pass
     return {
         "available": False,
-        "stats": {"enabled": False, "running": False},
+        "stats": {"enabled": False, "running": False, "model_loaded": False},
+        "gpu": gpu,
     }
 
 
@@ -72,24 +76,28 @@ def toggle_mllm(req: MLLMEnableRequest):
     pipeline = detection_manager.get_pipeline()
     if not pipeline:
         return {"status": "error", "message": "No active detection pipeline"}
-    sidecar = getattr(pipeline, "_mllm_sidecar", None)
-    if sidecar is None:
-        return {"status": "error", "message": "MLLM sidecar not initialized"}
 
     if req.enabled:
         try:
-            # Force enable in sidecar config (MLLMConfig is frozen, so replace)
-            if not sidecar._config.enabled or sidecar._config.shadow_mode != req.shadow_mode:
-                sidecar._config = replace(sidecar._config, enabled=True, shadow_mode=req.shadow_mode)
-            sidecar.initialize()
-            return {"status": "success", "message": "MLLM sidecar enabled"}
+            ok = pipeline.enable_mllm(shadow_mode=req.shadow_mode)
+            if not ok:
+                return {"status": "error", "message": "MLLM failed to start"}
+            return {
+                "status": "success",
+                "message": "MLLM enabled (Qwen2-VL-2B-Instruct loaded)",
+                "gpu": _gpu_memory_stats(),
+            }
         except Exception as e:
             logger.error("Failed to enable MLLM: %s", e)
             return {"status": "error", "message": str(e)}
-    else:
-        try:
-            sidecar.shutdown()
-            return {"status": "success", "message": "MLLM sidecar disabled"}
-        except Exception as e:
-            logger.error("Failed to disable MLLM: %s", e)
-            return {"status": "error", "message": str(e)}
+
+    try:
+        pipeline.disable_mllm()
+        return {
+            "status": "success",
+            "message": "MLLM disabled, GPU memory released",
+            "gpu": _gpu_memory_stats(),
+        }
+    except Exception as e:
+        logger.error("Failed to disable MLLM: %s", e)
+        return {"status": "error", "message": str(e)}

@@ -381,14 +381,38 @@ class DetectionPipeline:
             logger.warning("MLLM sidecar not available: %s", e)
             self._mllm_sidecar = None
 
-    def enable_mllm(self) -> bool:
-        """Lazy-enable MLLM at runtime (loads model on demand)."""
+    def enable_mllm(self, shadow_mode: bool | None = None) -> bool:
+        """Lazy-enable MLLM at runtime (loads Qwen2-VL on demand)."""
+        from dataclasses import replace
+
+        cfg = self.cfg.mllm
+        if shadow_mode is not None:
+            cfg = replace(cfg, shadow_mode=shadow_mode)
+        self.cfg = replace(self.cfg, mllm=replace(cfg, enabled=True))
+
+        if self._mllm_sidecar is None:
+            from core.mllm.mllm_sidecar import MLLMSidecar
+            self._mllm_sidecar = MLLMSidecar(self.cfg.mllm)
+
+        self._mllm_sidecar._config = self.cfg.mllm
+        self._mllm_sidecar.initialize()
+        return self._mllm_sidecar.is_running
+
+    def disable_mllm(self) -> None:
+        """Disable MLLM and fully release GPU memory."""
+        from dataclasses import replace
+
         if self._mllm_sidecar is not None:
-            return True
-        if not self.cfg.mllm.enabled:
-            return False
-        self._init_mllm_sidecar()
-        return self._mllm_sidecar is not None
+            self._mllm_sidecar.shutdown()
+            self._mllm_sidecar = None
+        self.cfg = replace(self.cfg, mllm=replace(self.cfg.mllm, enabled=False))
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+        logger.info("MLLM disabled and GPU memory released")
 
     def process_frame(self, frame: np.ndarray, timestamp_s: float) -> dict[str, Any]:
         """Process a single frame: detect, track, extract skeletons, apply rules."""

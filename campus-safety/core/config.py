@@ -413,22 +413,24 @@ def load_config(path: str | None = None) -> AppConfig:
     mllm_raw = raw.get("mllm", {})
     mllm = MLLMConfig(
         enabled=bool(mllm_raw.get("enabled", False)),
-        model_type=str(mllm_raw.get("model_type", "qwen2-vl-2b")),
+        model_type=str(mllm_raw.get("model_type", "qwen2-vl-2b-instruct")),
         model_path=str(mllm_raw.get("model_path", "Qwen/Qwen2-VL-2B-Instruct")),
         inference_backend=str(mllm_raw.get("inference_backend", "auto")),
         device=str(mllm_raw.get("device", "auto")),
         half_precision=bool(mllm_raw.get("half_precision", True)),
-        max_new_tokens=int(mllm_raw.get("max_new_tokens", 256)),
-        temperature=float(mllm_raw.get("temperature", 0.3)),
-        key_frame_interval=int(mllm_raw.get("key_frame_interval", 15)),
+        use_flash_attention=bool(mllm_raw.get("use_flash_attention", True)),
+        max_new_tokens=int(mllm_raw.get("max_new_tokens", 128)),
+        temperature=float(mllm_raw.get("temperature", 0.2)),
+        key_frame_interval=int(mllm_raw.get("key_frame_interval", 30)),
+        min_inference_interval_s=float(mllm_raw.get("min_inference_interval_s", 3.0)),
         context_window_frames=int(mllm_raw.get("context_window_frames", 5)),
         min_frame_size=int(mllm_raw.get("min_frame_size", 224)),
-        max_frame_size=int(mllm_raw.get("max_frame_size", 512)),
+        max_frame_size=int(mllm_raw.get("max_frame_size", 384)),
         scene_description_enabled=bool(mllm_raw.get("scene_description_enabled", True)),
         scene_confidence_threshold=float(mllm_raw.get("scene_confidence_threshold", 0.5)),
         alarm_enhance_enabled=bool(mllm_raw.get("alarm_enhance_enabled", True)),
         enhancement_cooldown_s=float(mllm_raw.get("enhancement_cooldown_s", 10.0)),
-        shadow_mode=bool(mllm_raw.get("shadow_mode", True)),
+        shadow_mode=bool(mllm_raw.get("shadow_mode", False)),
     )
 
     # Parse TensorRT config

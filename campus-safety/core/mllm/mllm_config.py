@@ -21,22 +21,24 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True)
 class MLLMConfig:
     enabled: bool = False
-    model_type: str = "qwen2-vl-2b"
-    model_path: str = "models/mllm/qwen2-vl-2b"
-    inference_backend: str = "mock"
+    model_type: str = "qwen2-vl-2b-instruct"
+    model_path: str = "Qwen/Qwen2-VL-2B-Instruct"
+    inference_backend: str = "auto"
     device: str = "auto"
     half_precision: bool = True
-    max_new_tokens: int = 256
-    temperature: float = 0.3
-    key_frame_interval: int = 15
+    use_flash_attention: bool = True
+    max_new_tokens: int = 128
+    temperature: float = 0.2
+    key_frame_interval: int = 30
+    min_inference_interval_s: float = 3.0
     context_window_frames: int = 5
     min_frame_size: int = 224
-    max_frame_size: int = 512
+    max_frame_size: int = 384
     scene_description_enabled: bool = True
     scene_confidence_threshold: float = 0.5
     alarm_enhance_enabled: bool = True
     enhancement_cooldown_s: float = 10.0
-    shadow_mode: bool = True
+    shadow_mode: bool = False
 
 
 @dataclass(frozen=True)

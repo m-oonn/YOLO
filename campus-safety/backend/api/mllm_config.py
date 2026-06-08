@@ -117,12 +117,13 @@ def update_mllm_config(req: MLLMConfigUpdateRequest):
     pipeline = detection_manager.get_pipeline()
 
     # Update runtime config if pipeline is active
-    if pipeline and hasattr(pipeline, "_mllm_sidecar") and pipeline._mllm_sidecar:
+    if pipeline:
         try:
-            sidecar = pipeline._mllm_sidecar
-            cfg = sidecar._config
+            from dataclasses import replace
 
-            # Build updated config dict
+            sidecar = getattr(pipeline, "_mllm_sidecar", None)
+            base_cfg = sidecar._config if sidecar else pipeline.cfg.mllm
+
             updates = {}
             if req.enabled is not None:
                 updates["enabled"] = req.enabled
@@ -147,15 +148,19 @@ def update_mllm_config(req: MLLMConfigUpdateRequest):
             if req.enhancement_cooldown_s is not None:
                 updates["enhancement_cooldown_s"] = req.enhancement_cooldown_s
 
-            # MLLMConfig is frozen, use replace
-            from dataclasses import replace
-            sidecar._config = replace(cfg, **updates)
+            new_cfg = replace(base_cfg, **updates)
+            pipeline.cfg = replace(pipeline.cfg, mllm=new_cfg)
 
-            # Re-initialize if enabling
-            if req.enabled and not cfg.enabled:
-                sidecar.initialize()
-            elif not req.enabled and cfg.enabled:
-                sidecar.shutdown()
+            if req.enabled is False and sidecar:
+                pipeline.disable_mllm()
+            elif req.enabled and not sidecar:
+                pipeline.enable_mllm(shadow_mode=new_cfg.shadow_mode)
+            elif sidecar:
+                sidecar._config = new_cfg
+                if req.enabled and not base_cfg.enabled:
+                    sidecar.initialize()
+                elif req.enabled is False and base_cfg.enabled:
+                    sidecar.shutdown()
 
             return {"status": "saved", "config": _get_mllm_config_from_pipeline()}
         except Exception as e:

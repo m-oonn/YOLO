@@ -110,6 +110,19 @@
             <span class="metric-label">推理</span>
             <span class="metric-value">{{ perfData.inference_ms }}ms</span>
           </div>
+          <div v-if="gpuStatus && gpuStatus.gpu_available" class="gpu-metric" :title="perfTooltip">
+            <span class="metric-label">显存</span>
+            <div class="gpu-bar-wrap">
+              <el-progress
+                :percentage="gpuUsagePct"
+                :stroke-width="6"
+                :show-text="false"
+                :color="gpuBarColor"
+                class="gpu-bar"
+              />
+              <span class="metric-value gpu-pct">{{ gpuUsagePct }}%</span>
+            </div>
+          </div>
           <StatusBadge
             v-if="perfData"
             :status="perfData.device === 'cuda:0' ? 'online' : perfData.device === 'mps' ? 'warning' : 'offline'"
@@ -222,6 +235,10 @@
           <div class="mllm-stat">
             <span class="mllm-stat-label">告警验证</span>
             <span class="mllm-stat-value">{{ mllmData.stats.alarms_enhanced || 0 }}次</span>
+          </div>
+          <div class="mllm-stat">
+            <span class="mllm-stat-label">模型</span>
+            <span class="mllm-stat-value">{{ mllmData.stats.model_loaded ? 'Qwen2-VL-2B' : '加载中' }}</span>
           </div>
           <div class="mllm-stat">
             <span class="mllm-stat-label">推理后端</span>
@@ -368,6 +385,23 @@ const fpsClass = computed(() => {
   if (fps.value >= 25) return 'fps-good'
   if (fps.value >= 15) return 'fps-warn'
   return 'fps-low'
+})
+
+const gpuUsagePct = computed(() => {
+  const g = gpuStatus.value
+  if (!g || !g.gpu_available) return 0
+  if (g.gpu_memory_usage_pct > 0) return Math.round(g.gpu_memory_usage_pct)
+  if (g.gpu_total_memory_mb > 0) {
+    return Math.round((g.gpu_used_memory_mb / g.gpu_total_memory_mb) * 100)
+  }
+  return 0
+})
+
+const gpuBarColor = computed(() => {
+  const pct = gpuUsagePct.value
+  if (pct >= 85) return '#ef4444'
+  if (pct >= 65) return '#f59e0b'
+  return '#22c55e'
 })
 
 let mjpegRetryTimer = null
@@ -732,10 +766,13 @@ const fetchMLLMStatus = async () => {
 
 const toggleMLLM = async (enabled) => {
   try {
-    const res = await mllmAPI.enable(enabled, true)
-    if (res.status === 'ok') {
+    const res = await mllmAPI.enable(enabled, false)
+    if (res.status === 'success' || res.status === 'ok') {
       ElMessage.success(enabled ? 'AI 场景理解已开启' : 'AI 场景理解已关闭')
       fetchMLLMStatus()
+      fetchGPUStatus()
+    } else {
+      ElMessage.error(res.message || '切换 MLLM 状态失败')
     }
   } catch (e) {
     ElMessage.error('切换 MLLM 状态失败')
@@ -1008,6 +1045,29 @@ onUnmounted(() => {
 
 .metric-value.fps-low {
   color: var(--color-danger);
+}
+
+.gpu-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.gpu-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.gpu-bar {
+  width: 72px;
+}
+
+.gpu-pct {
+  min-width: 32px;
+  font-size: 12px;
 }
 
 .file-tag {

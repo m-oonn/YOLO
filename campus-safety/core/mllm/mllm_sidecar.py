@@ -65,11 +65,12 @@ class MLLMSidecar:
 
     def __init__(self, config: MLLMConfig):
         self._config = config
-        self._engine = MLLMInferenceEngine(config)
+        self._engine: MLLMInferenceEngine | None = None
         self._buffer = SceneContextBuffer(max_frames=config.context_window_frames)
         self._enhancer = AlarmEnhancer(config)
         self._frame_counter = 0
         self._last_scene_description: dict[str, Any] = {}
+        self._last_inference_time: float = 0.0
         self._running = False
         self._worker_thread: threading.Thread | None = None
         self._task_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=DEFAULT_TASK_QUEUE_SIZE)
@@ -81,17 +82,28 @@ class MLLMSidecar:
             "errors": 0,
             "queue_overflows": 0,
             "last_processing_time_ms": 0.0,
+            "model_loaded": False,
         }
         self._shutdown_complete = threading.Event()
 
+    def _ensure_engine(self) -> MLLMInferenceEngine:
+        if self._engine is None:
+            self._engine = MLLMInferenceEngine(self._config)
+        return self._engine
+
     def initialize(self) -> None:
-        """Initialize the MLLM sidecar and start the worker thread."""
+        """Load MLLM model on demand and start the worker thread."""
         if not self._config.enabled:
             logger.info("MLLM sidecar disabled by config")
             return
-        logger.info("Initializing MLLM sidecar")
+        if self._running and self._worker_thread and self._worker_thread.is_alive():
+            return
+        logger.info("Initializing MLLM sidecar (lazy model load)")
         try:
-            self._engine.initialize()
+            engine = self._ensure_engine()
+            engine.initialize()
+            with self._lock:
+                self._stats["model_loaded"] = engine.is_loaded
             self._running = True
             self._shutdown_complete.clear()
             self._worker_thread = threading.Thread(
@@ -125,7 +137,12 @@ class MLLMSidecar:
         with self._lock:
             self._stats["frames_received"] += 1
 
-        self._buffer.add_frame(detections=detections, events=events, frame_data=None)
+        self._buffer.add_frame(detections=detections, events=events, frame_data=frame)
+
+        min_interval = self._config.min_inference_interval_s
+        now = time.time()
+        if now - self._last_inference_time < min_interval:
+            return
 
         if self._frame_counter % self._config.key_frame_interval == 0:
             should_describe = self._config.scene_description_enabled
@@ -226,10 +243,21 @@ class MLLMSidecar:
         Args:
             task: Task dictionary containing frame processing parameters.
         """
+        if self._engine is None or not self._engine.is_loaded:
+            return
+
         context = self._buffer.get_context()
+        frame = task.get("frame")
+        if frame is None:
+            latest = self._buffer.get_latest_frame()
+            frame = latest.frame_data if latest else None
+
+        self._last_inference_time = time.time()
+        generate_fn = self._engine.generate
+
         if task.get("should_describe"):
             prompt = build_scene_prompt(context)
-            raw_text = self._engine.generate(prompt, image=None)
+            raw_text = generate_fn(prompt, image=frame)
             if raw_text:
                 parsed = parse_json_response(raw_text)
                 if parsed:
@@ -243,7 +271,7 @@ class MLLMSidecar:
                     alarm_type,
                     str(event),
                     context,
-                    self._engine.generate,
+                    generate_fn,
                 )
                 if result:
                     with self._lock:
@@ -258,6 +286,8 @@ class MLLMSidecar:
         event = task.get("event", {})
         alarm_type = event.get("type", "unknown")
         context = self._buffer.get_context()
+        if self._engine is None or not self._engine.is_loaded:
+            return
         result = self._enhancer.enhance_alarm(
             alarm_type, str(event), context, self._engine.generate
         )
@@ -279,7 +309,11 @@ class MLLMSidecar:
         if self._worker_thread and self._worker_thread.is_alive():
             self._worker_thread.join(timeout=SHUTDOWN_TIMEOUT)
 
-        self._engine.shutdown()
+        if self._engine is not None:
+            self._engine.shutdown()
+            self._engine = None
+        with self._lock:
+            self._stats["model_loaded"] = False
 
         while not self._task_queue.empty():
             try:
@@ -298,7 +332,11 @@ class MLLMSidecar:
         """
         with self._lock:
             stats = dict(self._stats)
-            stats["engine"] = self._engine.get_stats()
+            stats["engine"] = self._engine.get_stats() if self._engine else {
+                "backend": "none",
+                "loaded": False,
+            }
+            stats["model_loaded"] = self._engine.is_loaded if self._engine else False
             stats["enhancer"] = self._enhancer.get_stats()
             stats["buffer_size"] = self._buffer.size
             stats["enabled"] = self._config.enabled

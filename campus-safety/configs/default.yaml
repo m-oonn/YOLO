@@ -10,13 +10,17 @@ mllm:
   alarm_enhance_enabled: true
   enabled: false
   enhancement_cooldown_s: 10.0
+  half_precision: true
   inference_backend: auto
-  key_frame_interval: 15
-  max_new_tokens: 512
-  model_path: models/mllm/qwen2-vl-2b
-  model_type: qwen2-vl-2b
+  key_frame_interval: 30
+  max_frame_size: 384
+  max_new_tokens: 128
+  min_inference_interval_s: 3.0
+  model_path: Qwen/Qwen2-VL-2B-Instruct
+  model_type: qwen2-vl-2b-instruct
   scene_description_enabled: true
   shadow_mode: false
+  use_flash_attention: true
 
 model:
   classes: null

@@ -25,24 +25,28 @@ from core.mllm.scene_context_buffer import SceneContext
 
 logger = logging.getLogger(__name__)
 
-SCENE_DESCRIPTION_PROMPT = """你是一个校园安全监控场景分析助手。根据以下监控数据，分析当前场景状态。
+SCENE_DESCRIPTION_PROMPT = """你是校园安全监控AI助手。请结合监控画面和检测数据，识别以下常见校园安全场景：
+- 有人摔倒（人员躺倒、姿态异常）
+- 人群聚集（多人近距离停留、密度高）
+- 车辆违停（机动车/电动车停在禁停区域）
+- 奔跑追逐、打架斗殴、区域入侵
 
-场景数据：
+检测数据摘要：
 {context}
 
-请以JSON格式输出分析结果，包含以下字段：
-{{
-  "scene_summary": "场景简要描述（一句话）",
-  "activity_type": "主要活动类型（正常/奔跑/聚集/跌倒/打架/入侵/其他）",
-  "confidence": 0.0-1.0的置信度,
-  "anomaly_detected": true/false,
-  "anomaly_details": "异常详情描述（如无异常则为空字符串）",
-  "risk_level": "低/中/高",
-  "suggested_action": "建议采取的行动",
-  "narrative": "用中文写一段50-100字的自然语言场景描述，包含人物外观特征（服装颜色、性别、大致年龄）、行为动作、场景环境。用流畅的段落文字表述，便于安保人员快速理解。如无异常则描述正常场景。"
-}}
+请仔细观察画面中的：人物数量与分布、身体姿态、车辆、区域占用情况。
 
-仅输出JSON，不要输出其他内容。"""
+以JSON格式输出（仅JSON，无其他文字）：
+{{
+  "scene_summary": "一句话场景摘要",
+  "activity_type": "正常/奔跑/人群聚集/有人摔倒/打架/车辆违停/区域入侵/其他",
+  "confidence": 0.0到1.0,
+  "anomaly_detected": true或false,
+  "anomaly_details": "异常详情，无异常则为空字符串",
+  "risk_level": "低/中/高",
+  "suggested_action": "建议处置措施",
+  "narrative": "50-100字中文场景描述，含人物特征、行为、环境，便于安保人员快速判断"
+}}"""
 
 ALARM_VERIFICATION_PROMPT = """你是校园安全告警验证助手。系统规则引擎产生了以下告警，请根据场景数据判断该告警是否为误报。
 
