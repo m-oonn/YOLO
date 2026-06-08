@@ -162,9 +162,24 @@ pip install -r requirements-dev.txt
 pytest tests/ -q --no-cov
 ```
 
+## Docker 部署（GPU）
+
+```bash
+cp .env.example .env
+cp config.example.yaml configs/default.yaml
+python scripts/download_models.py
+
+cd frontend && npm ci && npm run build && cd ..
+docker compose build
+docker compose up -d
+```
+
+详见 [Docker 部署指南](docs/DOCKER.md)。
+
 ## 文档
 
 - [API 参考](docs/API.md)
+- [Docker 部署](docs/DOCKER.md)
 - [部署指南](docs/DEPLOYMENT.md)
 - [开发指南](docs/DEVELOPMENT.md)
 - [架构概览](docs/architecture/overview.md)

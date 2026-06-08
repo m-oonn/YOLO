@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+.venv
+.venv-verify
+venv
+env
+*.egg-info
+.pytest_cache
+pytest-cache-files*
+htmlcov
+.coverage
+coverage.xml
+
+# Node
+frontend/node_modules
+frontend/dist
+
+# Runtime data
+outputs/*
+!outputs/.gitkeep
+models/*
+!models/.gitkeep
+!models/README.md
+*.db
+*.log
+uploads
+
+# Media
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# IDE & local
+.vscode
+.idea
+.claude
+.cursor
+.env
+.env.*
+!.env.example
+
+# Docs & dev (not needed in runtime image)
+tests
+docs
+*.md
+!models/README.md
+
+# OS
+.DS_Store
+Thumbs.db
