@@ -1,6 +1,19 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+# ──────────────────────────────────────────────────────────
+# 【核心引擎】alarm_engine.py — 报警引擎（事件→报警）
+# 上游依赖：db_base.py（SQLite存储）, rules.py（Event数据类）
+# 下游调用：pipeline.py 触发；backend/alarm_singleton.py 管理单例
+# 核心职责：
+#   ① 事件分级 — 严重(打架/跌倒) / 警告(入侵/聚集) / 提示(奔跑)
+#   ② 去重抑制 — 同一报警30秒内不重复触发（debounce）
+#   ③ 同类型聚合 — 60秒窗口内合并相似报警
+#   ④ 自动升级 — 严重报警超时自动升级（escalation）
+#   ⑤ 通知分发 — WebSocket推送前端 + 日志记录
+# 数据流：Event → Alarm → SQLite存储 → WebSocket推送
+# ──────────────────────────────────────────────────────────
+
 """Alarm engine with level classification, suppression, aggregation, and escalation.
 
 Processes events from the rules engine and generates alarms with:
@@ -47,7 +60,6 @@ EVENT_LEVEL_MAP: dict[str, AlarmLevel] = {
     "running": AlarmLevel.INFO,
     "crowd": AlarmLevel.WARNING,
     "vehicle_intrusion": AlarmLevel.WARNING,
-    "suspicious": AlarmLevel.WARNING,
 }
 
 EVENT_LEVEL_LABELS: dict[int, str] = {

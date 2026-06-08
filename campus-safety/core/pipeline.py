@@ -1,6 +1,15 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+# ──────────────────────────────────────────────────────────
+# 【核心引擎】pipeline.py — 主检测流水线（系统中枢）
+# 上游依赖：rules.py, skeleton.py, behavior_analyzer.py,
+#           alarm_engine.py, events_store.py, video_archiver.py
+# 下游调用：backend/detection_manager.py 创建并驱动本流水线
+# 核心职责：摄像头取帧 → YOLO推理 → ByteTrack跟踪 → 规则检测 →
+#           骨架分析 → 报警生成 → 事件存储 → MJPEG视频流推送
+# ──────────────────────────────────────────────────────────
+
 """Core detection pipeline: captures video, runs YOLO inference, applies rules, stores events."""
 
 from __future__ import annotations
@@ -426,16 +435,10 @@ class DetectionPipeline:
                     # Suspicious Activity 10-class model mapping
                     if cls in ("violence", "fighting", "assaulting"):
                         event_type = "fight"
-                    elif cls in ("man_with_gun", "man_with_knife", "knife", "gun",
-                                 "kidnapping", "theft", "theaf_robbery",
-                                 "terrorist_with_time_bomb"):
-                        # Weapon / crime detections only count as "intrusion"
-                        # when zones are actually configured; otherwise emit
-                        # a dedicated "suspicious" event type.
-                        if self.cfg.rules.intrusion.zones:
-                            event_type = "intrusion"
-                        else:
-                            event_type = "suspicious"
+                    elif cls in ("man_with_gun", "man_with_knife", "knife", "gun"):
+                        event_type = "intrusion"
+                    elif cls in ("kidnapping", "theft", "theaf_robbery", "terrorist_with_time_bomb"):
+                        event_type = "intrusion"
                     else:
                         continue
                     frame_events.append(Event(

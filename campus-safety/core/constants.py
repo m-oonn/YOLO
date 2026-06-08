@@ -1,6 +1,17 @@
 # Copyright (c) 2025 YOLO Course Design Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+# ──────────────────────────────────────────────────────────
+# 【核心引擎】constants.py — 全局常量与工具函数
+# 依赖：无
+# 被调用：rules.py, pipeline.py, events_store.py
+# 核心职责：
+#   ① COCO类别映射（PERSON_CLASS_ID=0, VEHICLE_CLASS_IDS）
+#   ② 性能参数（VACUUM间隔、批量写入大小、MJPEG分块）
+#   ③ 检测颜色表（按类别着色）
+#   ④ 类别名称解析（get_class_name）
+# ──────────────────────────────────────────────────────────
+
 """Constants and helper functions for detection."""
 
 # ── Performance Tuning ─────────────────────────────────────────────────────────
@@ -97,7 +108,7 @@ COCO_CLASSES: list[str] = [
     "toothbrush",
 ]
 
-EVENT_TYPES: list[str] = ["running", "fall", "crowd", "intrusion", "fight", "vehicle_intrusion", "suspicious"]
+EVENT_TYPES: list[str] = ["running", "fall", "crowd", "intrusion", "fight", "vehicle_intrusion"]
 
 PERSON_CLASS_ID: int = 0
 
@@ -143,7 +154,6 @@ EVENT_PRIORITIES: dict[str, str] = {
     "crowd": "WARNING",
     "running": "INFO",
     "vehicle_intrusion": "WARNING",
-    "suspicious": "WARNING",
 }
 
 DEFAULT_PRIORITY: str = "INFO"

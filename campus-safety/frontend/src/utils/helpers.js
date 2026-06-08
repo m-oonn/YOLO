@@ -1,4 +1,12 @@
 /**
+ * ┌──────────────────────────────────────────┐
+ * │ 【工具】helpers.js — 事件类型映射工具      │
+ * │ 职责：事件类型 → 颜色/图标/中文标签 映射   │
+ * │ 6种类型：fight(打架)/fall(跌倒)/crowd(聚集)│
+ * │          running(奔跑)/intrusion(入侵)     │
+ * │          vehicle_intrusion(车辆闯入)       │
+ * │ 多个页面共用这些映射函数                   │
+ * └──────────────────────────────────────────┘
  * Copyright (c) 2025 YOLO Course Design Contributors
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -18,7 +26,6 @@ export function eventTypeColor(type) {
     intrusion: 'danger',
     fight: 'danger',
     vehicle_intrusion: 'warning',
-    suspicious: 'danger',
   }
   return colors[type] || 'info'
 }
@@ -36,7 +43,6 @@ export function statColor(type) {
     intrusion: '#f56c6c',
     fight: '#f56c6c',
     vehicle_intrusion: '#e6a23c',
-    suspicious: '#f56c6c',
   }
   return colors[type] || '#409eff'
 }
@@ -54,7 +60,6 @@ export function statIcon(type) {
     intrusion: Location,
     fight: Lightning,
     vehicle_intrusion: Van,
-    suspicious: Warning,
   }
   return icons[type] || Warning
 }
@@ -139,7 +144,6 @@ export function eventTypeLabel(type) {
     intrusion: '区域入侵',
     fight: '打架斗殴',
     vehicle_intrusion: '车辆入侵',
-    suspicious: '可疑行为',
   }
   return labels[type] || type
 }

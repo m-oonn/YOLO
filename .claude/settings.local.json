@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(wc *)",
+      "Bash(python -m pytest tests/ -x -v)",
+      "Bash(python -m pytest tests/ -v --ignore=tests/test_api.py -x)",
+      "Bash(python -m pytest tests/test_pipeline.py tests/test_coverage_boost.py tests/test_action_analyzer.py tests/test_alarm_engine.py tests/test_behavior_analyzer.py -v)",
+      "WebSearch",
+      "WebFetch(domain:blog.csdn.net)"
+    ]
+  }
+}
