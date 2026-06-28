@@ -15,21 +15,35 @@
       <div v-for="i in 4" :key="'h' + i" class="sk-line sk-col" />
     </div>
     <div v-for="row in rows" :key="row" class="sk-row">
-      <div v-for="col in 4" :key="'r' + row + 'c' + col" class="sk-line sk-col" :class="{ 'sk-col-short': col === 4 }" />
+      <div
+        v-for="col in 4"
+        :key="'r' + row + 'c' + col"
+        class="sk-line sk-col"
+        :class="{ 'sk-col-short': col === 4 }"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
 defineProps({
-  type: { type: String, default: 'table', validator: (v) => ['table', 'card', 'stats'].includes(v) },
+  type: {
+    type: String,
+    default: 'table',
+    validator: (v) => ['table', 'card', 'stats'].includes(v),
+  },
   rows: { type: Number, default: 5 },
 })
 </script>
 
 <style scoped>
 .sk-line {
-  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-overlay) 50%, var(--bg-elevated) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-overlay) 50%,
+    var(--bg-elevated) 75%
+  );
   background-size: 200px 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-sm);
@@ -119,7 +133,11 @@ defineProps({
 }
 
 @keyframes shimmer {
-  0% { background-position: -200px 0; }
-  100% { background-position: calc(200px + 100%) 0; }
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
 }
 </style>

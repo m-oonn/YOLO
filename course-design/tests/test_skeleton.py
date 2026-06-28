@@ -16,19 +16,22 @@ COURSE_DIR = str(Path(__file__).resolve().parent.parent)
 if COURSE_DIR not in sys.path:
     sys.path.insert(0, COURSE_DIR)
 
+from core.constants import (
+    NUM_SKELETON_KEYPOINTS,
+    SKELETON_ANGLE_GROUPS,
+    SKELETON_BONES,
+)
+from core.skeleton import (
+    COCO_KEYPOINTS as SKELETON_KEYPOINTS,
+)
 from core.skeleton import (
     Skeleton,
     SkeletonExtractor,
     SkeletonRenderer,
-    SkeletonKeypoint as Keypoint,
     compute_torso_angle,
-    compute_all_bone_angles,
-    COCO_KEYPOINTS as SKELETON_KEYPOINTS,
 )
-from core.constants import (
-    NUM_SKELETON_KEYPOINTS,
-    SKELETON_BONES,
-    SKELETON_ANGLE_GROUPS,
+from core.skeleton import (
+    SkeletonKeypoint as Keypoint,
 )
 
 
@@ -97,7 +100,10 @@ class TestKeypoint:
 
 class TestSkeleton:
     def _make_valid_skel(self) -> Skeleton:
-        kps = [Keypoint(100 + i * 10, 200 + i * 5, 0.9) for i in range(NUM_SKELETON_KEYPOINTS)]
+        kps = [
+            Keypoint(100 + i * 10, 200 + i * 5, 0.9)
+            for i in range(NUM_SKELETON_KEYPOINTS)
+        ]
         return _make_skeleton(1, kps, 0.9)
 
     def test_bbox_from_valid_keypoints(self):
@@ -130,7 +136,9 @@ class TestSkeleton:
         assert skel.keypoints[0].y == pytest.approx(50.0)
 
     def test_is_low_quality_few_keypoints(self):
-        kps = [Keypoint(0, 0, 0.1) for _ in range(5)]  # only 5 keypoints, low confidence
+        kps = [
+            Keypoint(0, 0, 0.1) for _ in range(5)
+        ]  # only 5 keypoints, low confidence
         skel = _make_skeleton(1, kps, 0.1)
         assert skel.is_low_quality is True
 
@@ -153,6 +161,7 @@ class TestSkeletonExtractor:
 
 def _make_mock_results_no_keypoints():
     """Create mock YOLO results with no keypoints attribute."""
+
     class MockBoxes:
         xyxy = np.array([[100, 100, 200, 300]])
         conf = np.array([0.9])
@@ -251,10 +260,10 @@ class TestComputeBoneAngle:
 class TestComputeTorsoAngle:
     def test_upright(self):
         kps = [Keypoint(0, 0, 0.9) for _ in range(NUM_SKELETON_KEYPOINTS)]
-        kps[5] = Keypoint(90, 100, 0.9)   # left_shoulder
+        kps[5] = Keypoint(90, 100, 0.9)  # left_shoulder
         kps[6] = Keypoint(110, 100, 0.9)  # right_shoulder
         kps[11] = Keypoint(95, 200, 0.9)  # left_hip
-        kps[12] = Keypoint(105, 200, 0.9) # right_hip
+        kps[12] = Keypoint(105, 200, 0.9)  # right_hip
         skel = _make_skeleton(1, kps, 0.9)
         angle = compute_torso_angle(skel)
         # Torso is vertical -> angle near 0
@@ -262,8 +271,8 @@ class TestComputeTorsoAngle:
 
     def test_horizontal(self):
         kps = [Keypoint(0, 0, 0.9) for _ in range(NUM_SKELETON_KEYPOINTS)]
-        kps[5] = Keypoint(100, 100, 0.9)   # left_shoulder
-        kps[6] = Keypoint(100, 100, 0.9)   # right_shoulder
+        kps[5] = Keypoint(100, 100, 0.9)  # left_shoulder
+        kps[6] = Keypoint(100, 100, 0.9)  # right_shoulder
         kps[11] = Keypoint(200, 100, 0.9)  # left_hip
         kps[12] = Keypoint(200, 100, 0.9)  # right_hip
         skel = _make_skeleton(1, kps, 0.9)
@@ -319,7 +328,7 @@ class TestConstants:
             assert start != end
 
     def test_bone_angles_reference_valid_kps(self):
-        for name, a, b, c in SKELETON_ANGLE_GROUPS:
+        for _name, a, b, c in SKELETON_ANGLE_GROUPS:
             assert 0 <= a < NUM_SKELETON_KEYPOINTS
             assert 0 <= b < NUM_SKELETON_KEYPOINTS
             assert 0 <= c < NUM_SKELETON_KEYPOINTS

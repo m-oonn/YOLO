@@ -25,7 +25,15 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Constants for file upload validation
-ALLOWED_VIDEO_EXTENSIONS: set[str] = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"}
+ALLOWED_VIDEO_EXTENSIONS: set[str] = {
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".mkv",
+    ".flv",
+    ".wmv",
+    ".webm",
+}
 ALLOWED_VIDEO_MIME_TYPES: set[str] = {
     "video/mp4",
     "video/x-msvideo",
@@ -87,7 +95,7 @@ def sanitize_filename(filename: str) -> str:
     if not sanitized or sanitized.startswith("."):
         sanitized = f"file_{sanitized}" if sanitized else "unnamed"
 
-    return sanitized[: 255]
+    return sanitized[:255]
 
 
 def validate_model_path(model_path: str, models_dir: str | Path) -> tuple[bool, str]:
@@ -139,7 +147,11 @@ def sanitize_config_value(value: Any, max_length: int = 1000) -> Any:
     elif isinstance(value, list):
         return [sanitize_config_value(v, max_length) for v in value[:100]]
     elif isinstance(value, dict):
-        return {k: sanitize_config_value(v, max_length) for k, v in value.items() if isinstance(k, str)}
+        return {
+            k: sanitize_config_value(v, max_length)
+            for k, v in value.items()
+            if isinstance(k, str)
+        }
     return value
 
 
@@ -157,12 +169,17 @@ def validate_upload_extension(filename: str) -> tuple[bool, str]:
 
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ALLOWED_VIDEO_EXTENSIONS:
-        return False, f"Invalid file extension: {ext}. Allowed: {', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}"
+        return (
+            False,
+            f"Invalid file extension: {ext}. Allowed: {', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}",
+        )
 
     return True, ""
 
 
-def validate_upload_mime(content: bytes, mime_type: str | None = None) -> tuple[bool, str]:
+def validate_upload_mime(
+    content: bytes, mime_type: str | None = None
+) -> tuple[bool, str]:
     """Validate uploaded file content and MIME type.
 
     Args:
@@ -194,7 +211,7 @@ def validate_upload_mime(content: bytes, mime_type: str | None = None) -> tuple[
 
 class RateLimiter:
     """Simple in-memory rate limiter for API endpoints.
-    
+
     Thread-safe implementation with automatic cleanup of expired entries.
     """
 
@@ -211,7 +228,9 @@ class RateLimiter:
             if key not in self._requests:
                 self._requests[key] = []
 
-            self._requests[key] = [t for t in self._requests[key] if now - t < self._window_seconds]
+            self._requests[key] = [
+                t for t in self._requests[key] if now - t < self._window_seconds
+            ]
 
             if not self._requests[key]:
                 del self._requests[key]
@@ -230,7 +249,9 @@ class RateLimiter:
             if key not in self._requests:
                 return self._max_requests
 
-            active_requests = [t for t in self._requests[key] if now - t < self._window_seconds]
+            active_requests = [
+                t for t in self._requests[key] if now - t < self._window_seconds
+            ]
             return max(0, self._max_requests - len(active_requests))
 
     def reset(self, key: str) -> None:

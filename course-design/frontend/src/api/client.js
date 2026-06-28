@@ -54,15 +54,17 @@ export const detectionAPI = {
     return dedupRequest(`detection:upload:${file.name}:${file.size}`, () => {
       const form = new FormData()
       form.append('file', file)
-      return api.post('/detection/upload', form, {
-        timeout: 120000,
-        onUploadProgress: (progressEvent) => {
-          if (onProgress && progressEvent.total) {
-            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-            onProgress(percent)
-          }
-        },
-      }).then((r) => r.data)
+      return api
+        .post('/detection/upload', form, {
+          timeout: 120000,
+          onUploadProgress: (progressEvent) => {
+            if (onProgress && progressEvent.total) {
+              const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+              onProgress(percent)
+            }
+          },
+        })
+        .then((r) => r.data)
     })
   },
 }
@@ -92,10 +94,10 @@ export const mllmAPI = {
 }
 
 export const configAPI = {
-  get: () => api.get('/config').then((r) => r.data),
+  get: () => api.get('/config/').then((r) => r.data),
   updateRules: (rules) => api.post('/config/rules', rules).then((r) => r.data),
   updateSettings: (settings) => api.post('/config/settings', settings).then((r) => r.data),
-  updateZones: (zones) => api.post('/config/zones', zones).then((r) => r.data),
+  updateZones: (zones) => api.post('/config/zones', { zones }).then((r) => r.data),
 }
 
 export const archivesAPI = {

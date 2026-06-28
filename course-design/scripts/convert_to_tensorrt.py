@@ -21,7 +21,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.config import load_config
-from core.tensorrt_utils import TensorRTConverter, is_tensorrt_available, get_tensorrt_version
+from core.tensorrt_utils import (
+    TensorRTConverter,
+    get_tensorrt_version,
+    is_tensorrt_available,
+)
 
 logging.basicConfig(
     level=logging.INFO,

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import time
 from unittest.mock import MagicMock, patch
 
 from core.gpu_manager import GPUInfo, GPUManager, GPUPerformanceSnapshot
@@ -59,9 +58,15 @@ class TestGPUManagerResolution:
 
     def test_resolve_device_custom_passthrough(self):
         manager = GPUManager()
-        assert manager.resolve_device("cuda:0") == "cuda:0"
+        if manager.is_cuda:
+            assert manager.resolve_device("cuda:0") == "cuda:0"
+        else:
+            assert manager.resolve_device("cuda:0") == "cpu"
         assert manager.resolve_device("cpu") == "cpu"
-        assert manager.resolve_device("mps") == "mps"
+        if manager.is_mps:
+            assert manager.resolve_device("mps") == "mps"
+        else:
+            assert manager.resolve_device("mps") == "cpu"
 
     def test_should_use_half_cpu_returns_false(self):
         manager = GPUManager()
@@ -102,12 +107,25 @@ class TestGPUManagerCUDA:
         manager = GPUManager()
         status = manager.get_status_dict()
         expected_keys = {
-            "gpu_available", "gpu_name", "gpu_total_memory_mb",
-            "gpu_used_memory_mb", "gpu_reserved_memory_mb",
-            "gpu_compute_capability", "cuda_version",
-            "supports_half", "supports_tensor_cores", "device",
-            "gpu_utilization_pct", "gpu_temperature_c", "gpu_power_w",
-            "is_jetson", "jetson_model", "jetson_memory_type",
+            "gpu_available",
+            "gpu_name",
+            "gpu_total_memory_mb",
+            "gpu_used_memory_mb",
+            "gpu_total_used_mb",
+            "gpu_reserved_memory_mb",
+            "gpu_memory_pressure",
+            "gpu_memory_usage_pct",
+            "gpu_compute_capability",
+            "cuda_version",
+            "supports_half",
+            "supports_tensor_cores",
+            "device",
+            "gpu_utilization_pct",
+            "gpu_temperature_c",
+            "gpu_power_w",
+            "is_jetson",
+            "jetson_model",
+            "jetson_memory_type",
             "jetson_effective_vram_gb",
         }
         assert set(status.keys()) == expected_keys

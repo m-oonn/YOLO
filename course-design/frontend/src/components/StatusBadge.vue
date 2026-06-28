@@ -1,7 +1,9 @@
 <template>
   <span class="status-badge" :class="[`badge-${status}`, { pulse: animated }]">
     <span class="status-dot" />
-    <span class="status-label"><slot>{{ label }}</slot></span>
+    <span class="status-label">
+      <slot>{{ label }}</slot>
+    </span>
   </span>
 </template>
 
@@ -95,12 +97,25 @@ defineProps({
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
 }
 
 @keyframes pulse-ring {
-  0% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(2.5); }
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
 }
 </style>

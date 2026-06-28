@@ -36,9 +36,7 @@ class AlarmEnhancer:
         if not self._config.alarm_enhance_enabled:
             return False
         last_time = self._last_enhance_time.get(alarm_type, 0.0)
-        if time.time() - last_time < self._config.enhancement_cooldown_s:
-            return False
-        return True
+        return not time.time() - last_time < self._config.enhancement_cooldown_s
 
     def enhance_alarm(
         self,

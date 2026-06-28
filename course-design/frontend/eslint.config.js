@@ -6,6 +6,11 @@ import globals from 'globals'
 export default [
   { name: 'app/files-to-ignore', ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**'] },
   { name: 'app/files-to-lint', files: ['**/*.{js,mjs,vue}'] },
+  {
+    name: 'app/node-config-files',
+    files: ['*.config.js', '*.config.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
   js.configs.recommended,
   ...pluginVue.configs['flat/recommended'],
   {

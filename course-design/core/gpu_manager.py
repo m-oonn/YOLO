@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
-from dataclasses import dataclass, field
+import threading
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +33,6 @@ class GPUPerformanceSnapshot:
     gpu_temperature_c: float = 0.0
     gpu_power_usage_w: float = 0.0
 
-
-import threading
 
 class GPUManager:
     _instance: GPUManager | None = None
@@ -64,7 +64,7 @@ class GPUManager:
         try:
             model_path = "/proc/device-tree/model"
             if os.path.exists(model_path):
-                with open(model_path, "r") as f:
+                with open(model_path) as f:
                     model_str = f.read().strip().rstrip("\x00")
                 if "jetson" in model_str.lower() or "tegra" in model_str.lower():
                     self._is_jetson = True
@@ -76,11 +76,16 @@ class GPUManager:
     def _detect_gpu(self) -> None:
         try:
             import torch
+
             self._torch_available = True
             if torch.cuda.is_available():
                 self._cuda_available = True
                 props = torch.cuda.get_device_properties(0)
-                total_mem = getattr(props, "total_memory", None) or getattr(props, "total_global_mem", None) or getattr(props, "total_mem", 0)
+                total_mem = (
+                    getattr(props, "total_memory", None)
+                    or getattr(props, "total_global_mem", None)
+                    or getattr(props, "total_mem", 0)
+                )
                 self._gpu_info = GPUInfo(
                     available=True,
                     name=props.name,
@@ -93,10 +98,8 @@ class GPUManager:
                     jetson_model=self._jetson_model,
                 )
                 self._device_name = "cuda:0"
-                try:
+                with contextlib.suppress(Exception):
                     self._gpu_info.cuda_version = torch.version.cuda or ""
-                except Exception:
-                    pass
                 logger.info(
                     f"GPU detected: {props.name} "
                     f"({self._gpu_info.total_memory_mb:.0f}MB, "
@@ -171,7 +174,10 @@ class GPUManager:
         if config_device == "auto":
             return self._device_name
         if config_device.startswith("cuda") and not self._cuda_available:
-            logger.warning("CUDA requested (%s) but not available, falling back to CPU", config_device)
+            logger.warning(
+                "CUDA requested (%s) but not available, falling back to CPU",
+                config_device,
+            )
             return "cpu"
         if config_device == "mps" and self._device_name != "mps":
             logger.warning("MPS requested but not available, falling back to CPU")
@@ -188,8 +194,10 @@ class GPUManager:
         if not self._cuda_available:
             return snap
         try:
-            import torch
             import time as _time
+
+            import torch
+
             snap.timestamp = _time.time()
             snap.memory_allocated_mb = round(
                 torch.cuda.memory_allocated(0) / (1024**2), 1
@@ -197,13 +205,30 @@ class GPUManager:
             snap.memory_reserved_mb = round(
                 torch.cuda.memory_reserved(0) / (1024**2), 1
             )
-            total_mem = getattr(torch.cuda.get_device_properties(0), "total_memory", None) or getattr(torch.cuda.get_device_properties(0), "total_global_mem", None) or getattr(torch.cuda.get_device_properties(0), "total_mem", 1)
-            snap.gpu_utilization_pct = round(snap.memory_allocated_mb / (total_mem / (1024**2)) * 100, 1) if total_mem > 0 else 0
+            total_mem = (
+                getattr(torch.cuda.get_device_properties(0), "total_memory", None)
+                or getattr(
+                    torch.cuda.get_device_properties(0), "total_global_mem", None
+                )
+                or getattr(torch.cuda.get_device_properties(0), "total_mem", 1)
+            )
+            snap.gpu_utilization_pct = (
+                round(snap.memory_allocated_mb / (total_mem / (1024**2)) * 100, 1)
+                if total_mem > 0
+                else 0
+            )
         except Exception:
             pass
 
         try:
-            from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetUtilizationRates, nvmlDeviceGetTemperature, nvmlDeviceGetPowerUsage
+            from pynvml import (
+                nvmlDeviceGetHandleByIndex,
+                nvmlDeviceGetPowerUsage,
+                nvmlDeviceGetTemperature,
+                nvmlDeviceGetUtilizationRates,
+                nvmlInit,
+            )
+
             nvmlInit()
             handle = nvmlDeviceGetHandleByIndex(0)
             try:
@@ -211,14 +236,10 @@ class GPUManager:
                 snap.gpu_utilization_pct = util.gpu
             except Exception:
                 pass
-            try:
+            with contextlib.suppress(Exception):
                 snap.gpu_temperature_c = nvmlDeviceGetTemperature(handle, 0)
-            except Exception:
-                pass
-            try:
+            with contextlib.suppress(Exception):
                 snap.gpu_power_usage_w = nvmlDeviceGetPowerUsage(handle) / 1000.0
-            except Exception:
-                pass
         except ImportError:
             pass
         except Exception:
@@ -231,6 +252,7 @@ class GPUManager:
             return
         try:
             import torch
+
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
             logger.debug("GPU cache emptied and IPC collected")
@@ -255,6 +277,7 @@ class GPUManager:
             alloc_mb = 0
             try:
                 import torch
+
                 alloc_mb = torch.cuda.memory_allocated(0) / (1024**2)
             except Exception:
                 pass
@@ -292,9 +315,16 @@ class GPUManager:
         """
         try:
             import subprocess
+
             result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=5,
+                [
+                    "nvidia-smi",
+                    "--query-gpu=memory.used",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return float(result.stdout.strip().split("\n")[0].strip())
@@ -315,7 +345,11 @@ class GPUManager:
             "gpu_total_used_mb": round(total_used_mb, 1),
             "gpu_reserved_memory_mb": perf.memory_reserved_mb,
             "gpu_memory_pressure": pressure,
-            "gpu_memory_usage_pct": round((total_used_mb / info.total_memory_mb) * 100, 1) if info.total_memory_mb > 0 and total_used_mb > 0 else 0,
+            "gpu_memory_usage_pct": round(
+                (total_used_mb / info.total_memory_mb) * 100, 1
+            )
+            if info.total_memory_mb > 0 and total_used_mb > 0
+            else 0,
             "gpu_compute_capability": f"{info.compute_capability[0]}.{info.compute_capability[1]}",
             "cuda_version": info.cuda_version,
             "supports_half": info.supports_half,

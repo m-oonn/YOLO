@@ -17,18 +17,20 @@ Performance Optimizations Applied:
 from __future__ import annotations
 
 import logging
-import os
 import platform
 import queue
-import sys
 import threading
 import time
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import cv2
+import numpy as np
 
 if TYPE_CHECKING:
     from core.pipeline import DetectionPipeline
+
+import contextlib
 
 from backend.camera_utils import (
     diagnose_camera_failure,
@@ -36,10 +38,10 @@ from backend.camera_utils import (
     try_open_camera_windows,
 )
 from backend.store import get_store
+from core.behavior_analyzer import BehaviorAnalyzer
 from core.config import load_config
 from core.constants import PERSON_CLASS_ID
 from core.rules import RulesEngine
-from core.behavior_analyzer import BehaviorAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +82,9 @@ class DetectionManager:
         self._error_count: int = 0
         self._last_error: str | None = None
         self._cap = None  # cv2.VideoCapture | None
-        self._startup_deadline: float = 0.0  # timestamp after which loading is considered failed
+        self._startup_deadline: float = (
+            0.0  # timestamp after which loading is considered failed
+        )
         self._startup_progress: dict = {"step": "idle", "message": "", "percent": 0}
         self._progress_callbacks: list[Callable] = []
 
@@ -103,7 +107,10 @@ class DetectionManager:
         acquired = self._lock.acquire(timeout=1.0)
         if not acquired:
             logger.warning("Failed to acquire lock for start operation")
-            return {"status": "error", "message": "Detection start in progress, please wait"}
+            return {
+                "status": "error",
+                "message": "Detection start in progress, please wait",
+            }
 
         try:
             old_pipeline = None
@@ -156,13 +163,19 @@ class DetectionManager:
         self._start_time = time.time()
         logger.info("Detection started on source: %s", source)
         # 优化：立即返回，不等待模型加载完成，前端通过状态轮询获取进度
-        return {"status": "started", "source": source, "message": "检测启动中，模型加载可能需要几秒..."}
+        return {
+            "status": "started",
+            "source": source,
+            "message": "检测启动中，模型加载可能需要几秒...",
+        }
 
     def _record_error(self, error_msg: str) -> None:
         """Record error for diagnostics."""
         self._error_count += 1
         self._last_error = error_msg
-        logger.error("Detection error recorded: %s (total: %d)", error_msg, self._error_count)
+        logger.error(
+            "Detection error recorded: %s (total: %d)", error_msg, self._error_count
+        )
 
     def _release_pipeline(self, pipeline) -> None:
         """Safely release a pipeline and free GPU memory.
@@ -196,15 +209,17 @@ class DetectionManager:
     def _set_progress(self, step: str, message: str, percent: int) -> None:
         """Update startup progress and notify callbacks."""
         with self._lock:
-            self._startup_progress = {"step": step, "message": message, "percent": percent}
+            self._startup_progress = {
+                "step": step,
+                "message": message,
+                "percent": percent,
+            }
             # 复制回调列表，避免在锁内执行长时间操作
             callbacks = list(self._progress_callbacks)
         # 在锁外调用回调，避免死锁和长时间持有锁
         for cb in callbacks:
-            try:
+            with contextlib.suppress(Exception):
                 cb(self._startup_progress)
-            except Exception:
-                pass
 
     def get_progress(self) -> dict:
         """Get current startup progress."""
@@ -218,11 +233,8 @@ class DetectionManager:
 
     def unregister_progress_callback(self, callback: Callable) -> None:
         """Unregister a progress callback."""
-        with self._lock:
-            try:
-                self._progress_callbacks.remove(callback)
-            except ValueError:
-                pass
+        with self._lock, contextlib.suppress(ValueError):
+            self._progress_callbacks.remove(callback)
 
     def stop(self) -> dict:
         """Stop the running detection.
@@ -264,7 +276,9 @@ class DetectionManager:
             logger.info("Waiting for detection thread to stop")
             thread_to_stop.join(timeout=DEFAULT_SHUTDOWN_TIMEOUT)
             if thread_to_stop.is_alive():
-                logger.warning("Detection thread did not stop within timeout, cleaning up references")
+                logger.warning(
+                    "Detection thread did not stop within timeout, cleaning up references"
+                )
                 with self._lock:
                     self._pipeline = None
                     self._pipeline_thread = None
@@ -284,12 +298,19 @@ class DetectionManager:
             should_cleanup = False
             try:
                 from core.gpu_manager import GPUManager
+
                 gpu_mgr = GPUManager()
                 should_cleanup = gpu_mgr.should_release_model()
                 pressure = gpu_mgr.get_memory_pressure()
-                logger.info("GPU memory pressure: %s, will %s model", pressure, "release" if should_cleanup else "keep")
+                logger.info(
+                    "GPU memory pressure: %s, will %s model",
+                    pressure,
+                    "release" if should_cleanup else "keep",
+                )
             except Exception as e:
-                logger.warning("GPU pressure check failed, defaulting to cleanup: %s", e)
+                logger.warning(
+                    "GPU pressure check failed, defaulting to cleanup: %s", e
+                )
                 should_cleanup = True
 
             if should_cleanup:
@@ -299,14 +320,19 @@ class DetectionManager:
                 except Exception as e:
                     logger.exception("Error cleaning up pipeline: %s", e)
             else:
-                logger.info("GPU memory sufficient — keeping model in GPU for fast restart")
+                logger.info(
+                    "GPU memory sufficient — keeping model in GPU for fast restart"
+                )
 
         try:
             import torch
+
             if torch.cuda.is_available():
                 allocated = torch.cuda.memory_allocated() / 1024**2
                 reserved = torch.cuda.memory_reserved() / 1024**2
-                logger.info(f"GPU memory after stop: allocated={allocated:.1f}MB, reserved={reserved:.1f}MB")
+                logger.info(
+                    f"GPU memory after stop: allocated={allocated:.1f}MB, reserved={reserved:.1f}MB"
+                )
         except Exception:
             pass
 
@@ -325,7 +351,9 @@ class DetectionManager:
                 return
             thread = self._pipeline_thread
             if thread is None or not thread.is_alive():
-                logger.info("Stale detection state detected (active=True but thread dead). Auto-recovering.")
+                logger.info(
+                    "Stale detection state detected (active=True but thread dead). Auto-recovering."
+                )
                 stale_pipeline = self._pipeline
                 self._detection_active = False
                 self._pipeline = None
@@ -385,7 +413,8 @@ class DetectionManager:
                     logger.error(
                         "Detection startup timeout after %.1fs (deadline was %.1fs). "
                         "Camera or model loading appears stuck.",
-                        loading_elapsed, self._startup_deadline - (self._start_time or now),
+                        loading_elapsed,
+                        self._startup_deadline - (self._start_time or now),
                     )
                     self._detection_active = False
                     self._record_error(
@@ -455,7 +484,7 @@ class DetectionManager:
             quality = min(quality, 55)
 
         with self._lock:
-            if self._pipeline and hasattr(self._pipeline, '_perf_encode_ms'):
+            if self._pipeline and hasattr(self._pipeline, "_perf_encode_ms"):
                 encode_ms = self._pipeline._perf_encode_ms
                 if encode_ms > 50:
                     quality = min(quality, 70)
@@ -491,6 +520,7 @@ class DetectionManager:
                 # 切换模型前清理缓存，避免旧模型显存残留
                 try:
                     import torch
+
                     torch.cuda.empty_cache()
                 except Exception:
                     pass
@@ -501,8 +531,15 @@ class DetectionManager:
                 # 预热新模型，避免首次推理触发 CUDA 编译导致卡顿
                 try:
                     import numpy as np
-                    dummy = np.random.randint(0, 255, (self._pipeline.cfg.imgsz, self._pipeline.cfg.imgsz, 3), dtype=np.uint8)
+
+                    dummy = np.random.randint(
+                        0,
+                        255,
+                        (self._pipeline.cfg.imgsz, self._pipeline.cfg.imgsz, 3),
+                        dtype=np.uint8,
+                    )
                     import torch
+
                     with torch.no_grad():
                         new_model.predict(
                             dummy,
@@ -569,7 +606,9 @@ class DetectionManager:
             if self._mjpeg_client_count <= 0:
                 self._mjpeg_client_count = 0
                 self._mjpeg_has_viewers.clear()
-            logger.debug("MJPEG client disconnected (total: %d)", self._mjpeg_client_count)
+            logger.debug(
+                "MJPEG client disconnected (total: %d)", self._mjpeg_client_count
+            )
 
     def generate_mjpeg(self):
         """Yields MJPEG frames from the latest detection output.
@@ -619,7 +658,7 @@ class DetectionManager:
         """Wait for previous detection thread to finish, without holding pipeline lock.
 
         Returns an error message if the previous thread cannot be stopped, None on success.
-        
+
         优化：减少等待时间，使用非阻塞检查加速启动
         """
         thread = self._pipeline_thread
@@ -652,7 +691,6 @@ class DetectionManager:
 
     def _run_detection(self, source: str, config_path: str):
         """Run detection pipeline in a separate thread."""
-        import cv2  # lazy import — cv2 is a heavy C extension (~70MB)
         pipeline = None
         cap = None
         thread_name = threading.current_thread().name
@@ -662,7 +700,9 @@ class DetectionManager:
             self._set_progress("init", "正在初始化检测...", 5)
 
         try:
-            from core.pipeline import DetectionPipeline  # 延迟导入，避免后端启动时加载 PyTorch
+            from core.pipeline import (
+                DetectionPipeline,  # 延迟导入，避免后端启动时加载 PyTorch
+            )
 
             cfg = load_config(config_path)
             store = get_store()
@@ -700,7 +740,9 @@ class DetectionManager:
                 pipeline._behavior_analyzer = BehaviorAnalyzer(cfg)
             else:
                 with self._lock:
-                    self._set_progress("model", "正在加载模型（首次启动需要 10-30 秒）...", 10)
+                    self._set_progress(
+                        "model", "正在加载模型（首次启动需要 10-30 秒）...", 10
+                    )
                 pipeline = DetectionPipeline(cfg, store=store)
 
             with self._lock:
@@ -723,16 +765,16 @@ class DetectionManager:
             CAMERA_TIMEOUT = 5.0  # 从8秒减少到5秒
 
             if isinstance(src, int) and platform.system() == "Windows":
-                cap, cam_err = try_open_camera_windows(src, timeout_per_backend=CAMERA_TIMEOUT)
+                cap, cam_err = try_open_camera_windows(
+                    src, timeout_per_backend=CAMERA_TIMEOUT
+                )
             else:
                 cap, cam_err = open_camera_with_timeout(src, timeout_sec=CAMERA_TIMEOUT)
 
             if not cap or not cap.isOpened():
                 if cap is not None:
-                    try:
+                    with contextlib.suppress(Exception):
                         cap.release()
-                    except Exception:
-                        pass
                     cap = None
                 with self._lock:
                     self._set_progress("error", f"无法打开{source_type}", 0)
@@ -785,7 +827,9 @@ class DetectionManager:
                 if warmup_ok:
                     logger.info("Camera warmup completed")
                 else:
-                    logger.warning("Camera warmup: no valid frame after 10 attempts, proceeding anyway")
+                    logger.warning(
+                        "Camera warmup: no valid frame after 10 attempts, proceeding anyway"
+                    )
             else:
                 with self._lock:
                     self._set_progress("ready", "视频文件已就绪", 70)
@@ -798,10 +842,16 @@ class DetectionManager:
 
             # 摄像头断流重试上限；视频文件容错更低（文件损坏时快速失败）
             _max_cap_retries = 20 if not is_video_file else 5
-            capture_exit_reason = None  # None=用户停止, 'eof'=视频正常播完, 'max_retries'=读帧失败
+            capture_exit_reason = (
+                None  # None=用户停止, 'eof'=视频正常播完, 'max_retries'=读帧失败
+            )
 
             def _capture_loop():
-                nonlocal latest_frame, latest_timestamp, capture_running, capture_exit_reason
+                nonlocal \
+                    latest_frame, \
+                    latest_timestamp, \
+                    capture_running, \
+                    capture_exit_reason
                 last_capture_time = time.time()
                 consecutive_failures = 0
                 consecutive_eof = 0  # Track end-of-file for video files
@@ -817,24 +867,27 @@ class DetectionManager:
                             # 视频文件播放完毕时优雅退出
                             if is_video_file and consecutive_eof >= max_eof:
                                 logger.info(
-                                    "Video file playback completed after %d frames", frame_count
+                                    "Video file playback completed after %d frames",
+                                    frame_count,
                                 )
-                                capture_exit_reason = 'eof'
+                                capture_exit_reason = "eof"
                                 capture_running = False
                                 break
 
                             if consecutive_failures >= _max_cap_retries:
                                 logger.warning(
-                                    "Video capture ended after %d consecutive failures", consecutive_failures
+                                    "Video capture ended after %d consecutive failures",
+                                    consecutive_failures,
                                 )
-                                capture_exit_reason = 'max_retries'
+                                capture_exit_reason = "max_retries"
                                 capture_running = False
                                 break
 
                             if consecutive_failures % 5 == 0:  # 每5次失败记录一次
                                 logger.warning(
                                     "cap.read() failed (%d/%d), retrying...",
-                                    consecutive_failures, _max_cap_retries,
+                                    consecutive_failures,
+                                    _max_cap_retries,
                                 )
                             time.sleep(0.5)
                             continue
@@ -861,9 +914,10 @@ class DetectionManager:
             frame_count = 0
 
             # ── MJPEG encoder thread: separate JPEG encoding from detection loop ──
-            encode_queue: "queue.Queue[np.ndarray | None]" = queue.Queue(maxsize=2)
+            encode_queue: queue.Queue[np.ndarray | None] = queue.Queue(maxsize=2)
             encode_running = threading.Event()
             encode_running.set()
+
             def _encoder_thread_fn():
                 while encode_running.is_set():
                     try:
@@ -874,14 +928,18 @@ class DetectionManager:
                         break
                     t_enc_start = time.time()
                     jpeg_quality = min(pipeline._jpeg_quality, 70)
-                    _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+                    _, buf = cv2.imencode(
+                        ".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+                    )
                     pipeline._perf_encode_ms = (time.time() - t_enc_start) * 1000
                     with self._lock:
                         self._latest_frame = buf.tobytes()
                         self._mjpeg_frame_counter += 1
                     self._frame_ready.set()
 
-            encoder_thread = threading.Thread(target=_encoder_thread_fn, daemon=True, name="MJPEGEncoder")
+            encoder_thread = threading.Thread(
+                target=_encoder_thread_fn, daemon=True, name="MJPEGEncoder"
+            )
             encoder_thread.start()
 
             capture_thread = threading.Thread(
@@ -912,13 +970,15 @@ class DetectionManager:
 
                     if self.has_viewers():
                         stream_skip = pipeline._stream_frame_skip
-                        pipeline._stream_frame_counter = (pipeline._stream_frame_counter + 1) % (stream_skip + 1)
+                        pipeline._stream_frame_counter = (
+                            pipeline._stream_frame_counter + 1
+                        ) % (stream_skip + 1)
                         if pipeline._stream_frame_counter == 0:
-                            annotated = pipeline.annotate_frame(frame, pipeline._last_detections)
-                            try:
+                            annotated = pipeline.annotate_frame(
+                                frame, pipeline._last_detections
+                            )
+                            with contextlib.suppress(queue.Full):
                                 encode_queue.put_nowait(annotated)
-                            except queue.Full:
-                                pass
                         else:
                             pipeline._perf_encode_ms = 0
                     else:
@@ -946,7 +1006,7 @@ class DetectionManager:
             )
 
             # 检测静默失败：捕获线程因读帧耗尽退出，但未抛异常
-            if capture_exit_reason == 'max_retries':
+            if capture_exit_reason == "max_retries":
                 err_msg = (
                     f"视频源无法读取: {source} (连续 {_max_cap_retries} 次读取帧失败"
                     f"，仅处理了 {frame_count} 帧)"
@@ -968,10 +1028,8 @@ class DetectionManager:
 
             try:
                 encode_running.clear()
-                try:
+                with contextlib.suppress(Exception):
                     encode_queue.put_nowait(None)
-                except Exception:
-                    pass
                 encoder_thread.join(timeout=2.0)
             except Exception as e:
                 logger.exception("Error stopping encoder thread: %s", e)

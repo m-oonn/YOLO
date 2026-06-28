@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-import numpy as np
-
 from core.action_analyzer import (
     ActionAnalyzer,
     ActionFeatures,
@@ -16,7 +14,9 @@ from core.action_analyzer import (
 from core.skeleton import PersonSkeleton, SkeletonKeypoint
 
 
-def _make_skeleton(track_id: int, x: float = 0, y: float = 0, frame: int = 0, ts: float = 0.0):
+def _make_skeleton(
+    track_id: int, x: float = 0, y: float = 0, frame: int = 0, ts: float = 0.0
+):
     """Helper to create a skeleton with minimal fields."""
     sk = PersonSkeleton(
         track_id=track_id,
@@ -165,19 +165,37 @@ class TestActionAnalyzer:
     def test_calculate_chaotic_score(self):
         analyzer = ActionAnalyzer()
         seq = self.make_skeletons_for_speed(1, [(0, 0), (10, 10), (20, 0), (30, 10)])
-        seq2 = self.make_skeletons_for_speed(2, [(100, 100), (110, 110), (120, 100), (130, 110)])
+        seq2 = self.make_skeletons_for_speed(
+            2, [(100, 100), (110, 110), (120, 100), (130, 110)]
+        )
         score = analyzer._calculate_chaotic_score(seq, seq2)
         assert score >= 0
 
     def test_count_direction_changes(self):
         analyzer = ActionAnalyzer()
         # Zigzag pattern
-        seq = self.make_skeletons_for_speed(1, [
-            (0, 0), (100, 0), (0, 100), (100, 0), (0, 0), (100, 100),
-        ])
-        seq2 = self.make_skeletons_for_speed(2, [
-            (200, 200), (200, 200), (200, 200), (200, 200), (200, 200), (200, 200),
-        ])
+        seq = self.make_skeletons_for_speed(
+            1,
+            [
+                (0, 0),
+                (100, 0),
+                (0, 100),
+                (100, 0),
+                (0, 0),
+                (100, 100),
+            ],
+        )
+        seq2 = self.make_skeletons_for_speed(
+            2,
+            [
+                (200, 200),
+                (200, 200),
+                (200, 200),
+                (200, 200),
+                (200, 200),
+                (200, 200),
+            ],
+        )
         changes = analyzer._count_direction_changes(seq, seq2)
         assert changes >= 0
 

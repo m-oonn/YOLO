@@ -6,6 +6,7 @@ Usage (run ON the Jetson device):
 
 Output: models/trt_engines/yolo12s_fp16.engine
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 
-def export_to_onnx(model_path: str, output: str, imgsz: int = 640, opset: int = 17) -> str:
+def export_to_onnx(
+    model_path: str, output: str, imgsz: int = 640, opset: int = 17
+) -> str:
     """Export YOLO .pt to ONNX."""
     from ultralytics import YOLO
 
@@ -33,8 +36,8 @@ def build_trt_engine(
     workspace_gb: int = 2,
 ) -> str:
     """Build TensorRT engine from ONNX using trtexec."""
-    import subprocess
     import shutil
+    import subprocess
 
     trtexec = shutil.which("trtexec")
     if not trtexec:

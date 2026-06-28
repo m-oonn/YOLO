@@ -13,9 +13,13 @@
           size="small"
           :icon="Delete"
           :action="clearAllEvents"
-          :confirmConfig="{ title: '确认清空', message: '确定要清空所有事件记录吗？此操作不可恢复！', type: 'warning' }"
-          successMessage="事件已清空"
-          errorMessage="清空失败"
+          :confirm-config="{
+            title: '确认清空',
+            message: '确定要清空所有事件记录吗？此操作不可恢复！',
+            type: 'warning',
+          }"
+          success-message="事件已清空"
+          error-message="清空失败"
           @success="loadEvents"
         >
           清空全部
@@ -24,14 +28,12 @@
     </PageHeader>
 
     <!-- Filter bar -->
-    <SearchFilterBar
-      :filters="eventTypeFilters"
-      @search="onSearch"
-      @reset="resetFilters"
-    >
+    <SearchFilterBar :filters="eventTypeFilters" @search="onSearch" @reset="resetFilters">
       <template #right>
         <span class="total-text">
-          共 <strong>{{ total }}</strong> 条事件
+          共
+          <strong>{{ total }}</strong>
+          条事件
         </span>
       </template>
     </SearchFilterBar>
@@ -62,29 +64,61 @@
         row-class-name="event-row"
         row-key="id"
         :expand-row-keys="expandedRow ? [expandedRow] : []"
-        @row-click="onRowClick"
         highlight-current-row
         class="events-table"
+        @row-click="onRowClick"
       >
         <el-table-column type="expand">
           <template #default="{ row }">
             <div class="expand-detail">
               <div v-if="row.extra?.mllm_narrative" class="mllm-panel">
                 <div class="mllm-header">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--color-primary)"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="margin-right: 6px"
+                  >
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                   </svg>
                   <span class="mllm-title">AI 场景分析</span>
-                  <el-tag v-if="row.extra?.mllm_risk_level" size="small" :type="row.extra.mllm_risk_level === '高' ? 'danger' : row.extra.mllm_risk_level === '中' ? 'warning' : 'info'">
+                  <el-tag
+                    v-if="row.extra?.mllm_risk_level"
+                    size="small"
+                    :type="
+                      row.extra.mllm_risk_level === '高'
+                        ? 'danger'
+                        : row.extra.mllm_risk_level === '中'
+                          ? 'warning'
+                          : 'info'
+                    "
+                  >
                     风险: {{ row.extra.mllm_risk_level }}
                   </el-tag>
                 </div>
                 <p class="mllm-narrative">{{ row.extra.mllm_narrative }}</p>
                 <p v-if="row.extra?.mllm_action" class="mllm-action">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                    <line x1="12" y1="9" x2="12" y2="13"/>
-                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: -2px"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
                   建议: {{ row.extra.mllm_action }}
                 </p>
@@ -98,7 +132,12 @@
         </el-table-column>
         <el-table-column prop="event_type" label="类型" width="120">
           <template #default="{ row }">
-            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="dark" class="event-tag">
+            <el-tag
+              :type="eventTypeColor(row.event_type)"
+              size="small"
+              effect="dark"
+              class="event-tag"
+            >
               {{ eventTypeLabel(row.event_type) }}
             </el-tag>
           </template>
@@ -161,9 +200,19 @@
       <template #header>
         <div class="clips-header">
           <span class="clips-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-              <path d="M23 7l-7 5 7 5V7z"/>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="margin-right: 6px; vertical-align: -2px"
+            >
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
             </svg>
             事件视频回放
           </span>
@@ -182,9 +231,18 @@
           @keydown.enter="playClip(clip)"
         >
           <div class="clip-thumb">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <polygon points="10 8 16 12 10 16 10 8"/>
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="10 8 16 12 10 16 10 8" />
             </svg>
           </div>
           <div class="clip-info">
@@ -222,7 +280,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Delete, Cpu, WarningFilled, VideoPlay } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import { eventsAPI, archivesAPI } from '../api/client'
 import { logger } from '../utils/logger'
 import {
@@ -349,7 +407,9 @@ const loadClips = async () => {
   try {
     const res = await archivesAPI.list({ limit: 12 })
     clips.value = res.clips || []
-  } catch { /* archives may not be available when pipeline is off */ }
+  } catch {
+    /* archives may not be available when pipeline is off */
+  }
 }
 
 const playClip = (clip) => {

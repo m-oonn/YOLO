@@ -97,7 +97,15 @@ COCO_CLASSES: list[str] = [
     "toothbrush",
 ]
 
-EVENT_TYPES: list[str] = ["running", "fall", "crowd", "intrusion", "fight", "vehicle_intrusion", "suspicious"]
+EVENT_TYPES: list[str] = [
+    "running",
+    "fall",
+    "crowd",
+    "intrusion",
+    "fight",
+    "vehicle_intrusion",
+    "suspicious",
+]
 
 PERSON_CLASS_ID: int = 0
 
@@ -105,10 +113,23 @@ VEHICLE_CLASS_IDS: list[int] = [1, 2, 3, 5, 7]  # bicycle, car, motorcycle, bus,
 
 # COCO 17-keypoint skeleton definition
 SKELETON_KEYPOINTS: list[str] = [
-    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist", "left_hip", "right_hip",
-    "left_knee", "right_knee", "left_ankle", "right_ankle",
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
 ]
 
 NUM_SKELETON_KEYPOINTS: int = 17
@@ -116,23 +137,35 @@ NUM_SKELETON_KEYPOINTS: int = 17
 # Skeleton connections (bone index pairs for drawing and angle computation)
 SKELETON_BONES: list[tuple[int, int]] = [
     # Face
-    (0, 1), (0, 2), (1, 3), (2, 4),
+    (0, 1),
+    (0, 2),
+    (1, 3),
+    (2, 4),
     # Upper body
-    (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),
+    (5, 6),
+    (5, 7),
+    (7, 9),
+    (6, 8),
+    (8, 10),
     # Torso
-    (5, 11), (6, 12),
+    (5, 11),
+    (6, 12),
     # Lower body
-    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 12),
+    (11, 13),
+    (13, 15),
+    (12, 14),
+    (14, 16),
 ]
 
 # Bone groups for angle calculation (parent, child, grandchild for joint angles)
 SKELETON_ANGLE_GROUPS: list[tuple[str, int, int, int]] = [
-    ("left_elbow", 5, 7, 9),     # left_shoulder → left_elbow → left_wrist
-    ("right_elbow", 6, 8, 10),   # right_shoulder → right_elbow → right_wrist
-    ("left_knee", 11, 13, 15),   # left_hip → left_knee → left_ankle
+    ("left_elbow", 5, 7, 9),  # left_shoulder → left_elbow → left_wrist
+    ("right_elbow", 6, 8, 10),  # right_shoulder → right_elbow → right_wrist
+    ("left_knee", 11, 13, 15),  # left_hip → left_knee → left_ankle
     ("right_knee", 12, 14, 16),  # right_hip → right_knee → right_ankle
     ("left_hip_angle", 5, 11, 13),  # left_shoulder → left_hip → left_knee
-    ("right_hip_angle", 6, 12, 14), # right_shoulder → right_hip → right_knee
+    ("right_hip_angle", 6, 12, 14),  # right_shoulder → right_hip → right_knee
 ]
 
 # Priority levels for events

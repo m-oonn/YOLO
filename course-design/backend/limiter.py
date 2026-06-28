@@ -15,16 +15,18 @@ Attributes:
 try:
     from slowapi import Limiter
     from slowapi.util import get_remote_address
+
     app_limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 except ImportError:
     # Dummy limiter decorator that does nothing
     def dummy_limiter(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
-    
+
     class DummyLimiter:
         def limit(self, *args, **kwargs):
             return dummy_limiter
-    
+
     app_limiter = DummyLimiter()

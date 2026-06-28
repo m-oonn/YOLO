@@ -3,14 +3,19 @@
 
 """Custom exception classes for structured error handling."""
 
-
-from typing import Optional, Dict, Any
+from typing import Any
 
 
 class YOLOException(Exception):
     """Base exception for all YOLO application errors."""
 
-    def __init__(self, message: str, *, code: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.code = code or type(self).__name__
@@ -28,21 +33,29 @@ class YOLOException(Exception):
 class PipelineNotRunningError(YOLOException):
     """Raised when a pipeline operation requires a running pipeline but none is active."""
 
-    def __init__(self, message: str = "No active detection pipeline", details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str = "No active detection pipeline",
+        details: dict[str, Any] | None = None,
+    ):
         super().__init__(message, code="PIPELINE_NOT_RUNNING", details=details)
 
 
 class PipelineAlreadyRunningError(YOLOException):
     """Raised when attempting to start a pipeline that is already running."""
 
-    def __init__(self, message: str = "Detection pipeline is already running", details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str = "Detection pipeline is already running",
+        details: dict[str, Any] | None = None,
+    ):
         super().__init__(message, code="PIPELINE_ALREADY_RUNNING", details=details)
 
 
 class ModelLoadError(YOLOException):
     """Raised when a model fails to load."""
 
-    def __init__(self, model_path: str, cause: Optional[str] = None):
+    def __init__(self, model_path: str, cause: str | None = None):
         details = {"model_path": model_path}
         if cause:
             details["cause"] = cause
@@ -67,7 +80,7 @@ class ModelNotFoundError(YOLOException):
 class InvalidSourceError(YOLOException):
     """Raised when a video source (camera/file/URL) is invalid or inaccessible."""
 
-    def __init__(self, source: str, reason: Optional[str] = None):
+    def __init__(self, source: str, reason: str | None = None):
         details = {"source": source}
         if reason:
             details["reason"] = reason
@@ -81,7 +94,7 @@ class InvalidSourceError(YOLOException):
 class ConfigError(YOLOException):
     """Raised when configuration is invalid or cannot be loaded."""
 
-    def __init__(self, message: str, config_path: Optional[str] = None):
+    def __init__(self, message: str, config_path: str | None = None):
         details = {}
         if config_path:
             details["config_path"] = config_path
@@ -91,7 +104,7 @@ class ConfigError(YOLOException):
 class StorageError(YOLOException):
     """Raised when event storage operations fail."""
 
-    def __init__(self, message: str, operation: Optional[str] = None):
+    def __init__(self, message: str, operation: str | None = None):
         details = {}
         if operation:
             details["operation"] = operation
@@ -101,14 +114,14 @@ class StorageError(YOLOException):
 class AlarmEngineError(YOLOException):
     """Raised when alarm engine operations fail."""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
         super().__init__(message, code="ALARM_ENGINE_ERROR", details=details)
 
 
 class MLLMError(YOLOException):
     """Raised when MLLM sidecar operations fail."""
 
-    def __init__(self, message: str, model_type: Optional[str] = None):
+    def __init__(self, message: str, model_type: str | None = None):
         details = {}
         if model_type:
             details["model_type"] = model_type

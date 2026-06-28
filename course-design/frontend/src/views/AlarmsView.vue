@@ -12,14 +12,35 @@
           type="danger"
           plain
           :action="clearAllAlarms"
-          :confirmConfig="{ title: '确认清空', message: '确定要清空所有报警记录吗？此操作不可恢复！', type: 'warning' }"
-          successMessage="报警已清空"
-          errorMessage="清空失败"
-          @success="() => { loadAlarms(); loadStats(); }"
+          :confirm-config="{
+            title: '确认清空',
+            message: '确定要清空所有报警记录吗？此操作不可恢复！',
+            type: 'warning',
+          }"
+          success-message="报警已清空"
+          error-message="清空失败"
+          @success="
+            () => {
+              loadAlarms()
+              loadStats()
+            }
+          "
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="margin-right: 4px; vertical-align: -2px"
+          >
+            <polyline points="3 6 5 6 21 6" />
+            <path
+              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+            />
           </svg>
           清空全部
         </ActionButton>
@@ -32,19 +53,35 @@
         <span class="alert-count">{{ total }}</span>
         <span class="alert-label">全部</span>
       </div>
-      <div class="alert-item alert-critical" :class="{ active: filterLevel === 3 }" @click="filterLevel = 3">
+      <div
+        class="alert-item alert-critical"
+        :class="{ active: filterLevel === 3 }"
+        @click="filterLevel = 3"
+      >
         <span class="alert-count">{{ criticalCount }}</span>
         <span class="alert-label">紧急</span>
       </div>
-      <div class="alert-item alert-warning" :class="{ active: filterLevel === 2 }" @click="filterLevel = 2">
+      <div
+        class="alert-item alert-warning"
+        :class="{ active: filterLevel === 2 }"
+        @click="filterLevel = 2"
+      >
         <span class="alert-count">{{ warningCount }}</span>
         <span class="alert-label">警告</span>
       </div>
-      <div class="alert-item alert-info" :class="{ active: filterLevel === 1 }" @click="filterLevel = 1">
+      <div
+        class="alert-item alert-info"
+        :class="{ active: filterLevel === 1 }"
+        @click="filterLevel = 1"
+      >
         <span class="alert-count">{{ infoCount }}</span>
         <span class="alert-label">提示</span>
       </div>
-      <div class="alert-item alert-active" :class="{ active: filterActive }" @click="filterActive = !filterActive">
+      <div
+        class="alert-item alert-active"
+        :class="{ active: filterActive }"
+        @click="filterActive = !filterActive"
+      >
         <span class="alert-count">{{ activeCount }}</span>
         <span class="alert-label">未处理</span>
       </div>
@@ -64,7 +101,12 @@
       >
         <el-table-column prop="event_type" label="类型" width="110">
           <template #default="{ row }">
-            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="dark" class="event-tag">
+            <el-tag
+              :type="eventTypeColor(row.event_type)"
+              size="small"
+              effect="dark"
+              class="event-tag"
+            >
               {{ eventTypeLabel(row.event_type) }}
             </el-tag>
           </template>
@@ -77,6 +119,21 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+        <el-table-column label="AI复核" width="120" align="center">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="reviewInfo(row).label"
+              :content="reviewInfo(row).reason || '无理由说明'"
+              placement="top"
+              :disabled="!reviewInfo(row).reason"
+            >
+              <el-tag :type="reviewInfo(row).color" size="small" effect="plain">
+                {{ reviewInfo(row).label }}
+              </el-tag>
+            </el-tooltip>
+            <span v-else class="review-pending">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="count" label="触发次数" width="90" align="center">
           <template #default="{ row }">
             <span class="count-value">{{ row.count }}</span>
@@ -103,9 +160,14 @@
               type="success"
               text
               :action="() => resolveAlarm(row.id)"
-              successMessage="报警已处理"
-              errorMessage="处理失败"
-              @success="() => { loadAlarms(); loadStats(); }"
+              success-message="报警已处理"
+              error-message="处理失败"
+              @success="
+                () => {
+                  loadAlarms()
+                  loadStats()
+                }
+              "
             >
               处理
             </ActionButton>
@@ -152,18 +214,37 @@ const stats = ref({})
 const filteredAlarms = computed(() => {
   let list = alarms.value
   if (filterLevel.value !== null) {
-    list = list.filter(a => a.level === filterLevel.value)
+    list = list.filter((a) => a.level === filterLevel.value)
   }
   if (filterActive.value) {
-    list = list.filter(a => !a.resolved)
+    list = list.filter((a) => !a.resolved)
   }
   return list
 })
 
-const criticalCount = computed(() => alarms.value.filter(a => a.level === 3).length)
-const warningCount = computed(() => alarms.value.filter(a => a.level === 2).length)
-const infoCount = computed(() => alarms.value.filter(a => a.level === 1).length)
-const activeCount = computed(() => alarms.value.filter(a => !a.resolved).length)
+const criticalCount = computed(() => alarms.value.filter((a) => a.level === 3).length)
+const warningCount = computed(() => alarms.value.filter((a) => a.level === 2).length)
+const infoCount = computed(() => alarms.value.filter((a) => a.level === 1).length)
+const activeCount = computed(() => alarms.value.filter((a) => !a.resolved).length)
+
+// Map the second-stage MLLM verdict (stored in extra) to a display tag.
+const reviewInfo = (row) => {
+  const v = row.extra?.mllm_verdict
+  const conf = row.extra?.mllm_confidence
+  const reason = row.extra?.mllm_reasoning || ''
+  const shadow = row.extra?.mllm_shadow_dismissed
+  if (!v) {
+    return { label: row.status === 'suspected' ? '复核中' : '', color: 'info', reason: '' }
+  }
+  const pct = conf != null ? ` ${Math.round(conf * 100)}%` : ''
+  if (v === 'dismiss') {
+    return shadow
+      ? { label: '建议排除' + pct, color: 'warning', reason }
+      : { label: '已排除' + pct, color: 'info', reason }
+  }
+  if (v === 'escalate') return { label: '已升级' + pct, color: 'danger', reason }
+  return { label: '已确认' + pct, color: 'success', reason }
+}
 
 const loadAlarms = async () => {
   loading.value = true
@@ -171,7 +252,7 @@ const loadAlarms = async () => {
   try {
     const params = { limit: pageSize, offset: (page.value - 1) * pageSize }
     const res = await alarmsAPI.list(params)
-    alarms.value = (res.items || res.alarms || []).map(a => ({
+    alarms.value = (res.items || res.alarms || []).map((a) => ({
       ...a,
       resolved: a.status === 'resolved',
     }))
@@ -308,6 +389,10 @@ onMounted(() => {
 
 .alarms-table :deep(.el-tag) {
   font-weight: 500;
+}
+
+.review-pending {
+  color: var(--el-text-color-placeholder, #c0c4cc);
 }
 
 .level-badge {

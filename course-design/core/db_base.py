@@ -14,7 +14,6 @@ import os
 import sqlite3
 import threading
 from contextlib import suppress
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,9 @@ class SQLiteBase:
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
                 logger.info("Added missing column '%s' to %s", col_name, table)
             except sqlite3.OperationalError as e:
-                logger.warning("Could not add column '%s' to %s: %s", col_name, table, e)
+                logger.warning(
+                    "Could not add column '%s' to %s: %s", col_name, table, e
+                )
 
     def close(self) -> None:
         with suppress(sqlite3.Error):

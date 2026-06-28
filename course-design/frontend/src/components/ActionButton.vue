@@ -86,9 +86,7 @@ function getSuccessMessage(result) {
 
 function getErrorMessage(error) {
   if (!props.errorMessage) return ''
-  return typeof props.errorMessage === 'function'
-    ? props.errorMessage(error)
-    : props.errorMessage
+  return typeof props.errorMessage === 'function' ? props.errorMessage(error) : props.errorMessage
 }
 
 function handleSuccess(result) {
@@ -119,15 +117,11 @@ async function handleClick() {
   // Show confirmation dialog if configured
   if (props.confirmConfig) {
     try {
-      await ElMessageBox.confirm(
-        props.confirmConfig.message,
-        props.confirmConfig.title,
-        {
-          type: props.confirmConfig.type || 'warning',
-          confirmButtonText: props.confirmConfig.confirmButtonText,
-          cancelButtonText: props.confirmConfig.cancelButtonText,
-        }
-      )
+      await ElMessageBox.confirm(props.confirmConfig.message, props.confirmConfig.title, {
+        type: props.confirmConfig.type || 'warning',
+        confirmButtonText: props.confirmConfig.confirmButtonText,
+        cancelButtonText: props.confirmConfig.cancelButtonText,
+      })
     } catch {
       // User cancelled
       return

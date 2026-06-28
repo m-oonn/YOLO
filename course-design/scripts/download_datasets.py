@@ -7,13 +7,14 @@ Downloads sequentially: fire → weapon → fall → fight
 Usage:
   python scripts/download_datasets.py
 """
+
 from __future__ import annotations
 
 import os
 import shutil
 import sys
-import zipfile
 import tempfile
+import zipfile
 from pathlib import Path
 
 # Use a SHORT cache path to avoid Windows MAX_PATH (260 char) limit
@@ -29,10 +30,22 @@ RAW.mkdir(parents=True, exist_ok=True)
 import kagglehub
 
 DATASETS = [
-    ("fire",   "sinchanashivanand/indoor-fire-and-smoke-detection-with-yolov8", "Fire+Smoke"),
-    ("weapon", "alinoorqureshi/weapon-detection-yolo-optimized", "Weapon (pistol+knife)"),
-    ("fall",   "uttejkumarkandagatla/fall-detection-dataset", "Fall Detection"),
-    ("fight",  "musawerhussain/thisisithefinalkillerofthefightdetectiondatasetan", "Fight/Violence"),
+    (
+        "fire",
+        "sinchanashivanand/indoor-fire-and-smoke-detection-with-yolov8",
+        "Fire+Smoke",
+    ),
+    (
+        "weapon",
+        "alinoorqureshi/weapon-detection-yolo-optimized",
+        "Weapon (pistol+knife)",
+    ),
+    ("fall", "uttejkumarkandagatla/fall-detection-dataset", "Fall Detection"),
+    (
+        "fight",
+        "musawerhussain/thisisithefinalkillerofthefightdetectiondatasetan",
+        "Fight/Violence",
+    ),
 ]
 
 
@@ -69,10 +82,10 @@ def download_one(name: str, kaggle_id: str, desc: str) -> Path:
         shutil.rmtree(dest)
     dest.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"[{name}] {desc}")
     print(f"  Kaggle: {kaggle_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Let kagglehub download & extract (short cache avoids long paths)
     try:
@@ -96,7 +109,7 @@ def download_one(name: str, kaggle_id: str, desc: str) -> Path:
         print(f"  Copied {file_count} items to {dest}")
     except Exception as exc:
         print(f"  Kagglehub failed: {exc}")
-        print(f"  Trying manual extraction from archive...")
+        print("  Trying manual extraction from archive...")
         # Find archive in cache
         owner, dataset = kaggle_id.split("/")
         archive = CACHE / "datasets" / owner / dataset / "1.archive"
@@ -107,13 +120,19 @@ def download_one(name: str, kaggle_id: str, desc: str) -> Path:
             count = extract_archive(archive, dest)
             print(f"  Manually extracted {count} files to {dest}")
         else:
-            print(f"  ERROR: No archive found")
+            print("  ERROR: No archive found")
             return dest
 
     # Count
-    imgs = len(list(dest.rglob("*.jpg"))) + len(list(dest.rglob("*.png"))) + len(list(dest.rglob("*.jpeg")))
+    imgs = (
+        len(list(dest.rglob("*.jpg")))
+        + len(list(dest.rglob("*.png")))
+        + len(list(dest.rglob("*.jpeg")))
+    )
     lbls = len(list(dest.rglob("*.txt")))
-    size_mb = sum(f.stat().st_size for f in dest.rglob("*") if f.is_file()) / 1024 / 1024
+    size_mb = (
+        sum(f.stat().st_size for f in dest.rglob("*") if f.is_file()) / 1024 / 1024
+    )
     print(f"  Result: {imgs} images, {lbls} labels, {size_mb:.0f}MB")
     return dest
 
@@ -126,12 +145,16 @@ def main() -> int:
             print(f"[FATAL] {name}: {exc}")
             return 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("ALL DOWNLOADS COMPLETE")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for name, _, _ in DATASETS:
         d = RAW / name
-        imgs = len(list(d.rglob("*.jpg"))) + len(list(d.rglob("*.png"))) + len(list(d.rglob("*.jpeg")))
+        imgs = (
+            len(list(d.rglob("*.jpg")))
+            + len(list(d.rglob("*.png")))
+            + len(list(d.rglob("*.jpeg")))
+        )
         print(f"  {name}: {imgs} images")
     return 0
 

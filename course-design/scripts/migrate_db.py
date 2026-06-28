@@ -19,7 +19,9 @@ def migrate_database():
     """Add missing columns to events table."""
     if not os.path.exists(DB_PATH):
         print(f"Database not found at {DB_PATH}")
-        print("No migration needed - database will be created with correct schema on first run.")
+        print(
+            "No migration needed - database will be created with correct schema on first run."
+        )
         return True
 
     print(f"Connecting to database: {DB_PATH}")
@@ -54,7 +56,7 @@ def migrate_database():
     if changes_made:
         conn.commit()
         print("\n✓ Migration completed successfully!")
-        
+
         # Verify new schema
         cur.execute("PRAGMA table_info(events)")
         new_columns = {row[1] for row in cur.fetchall()}
@@ -73,5 +75,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nMigration failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

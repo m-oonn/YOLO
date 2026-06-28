@@ -17,20 +17,20 @@ import numpy as np
 import torch
 from ultralytics import YOLO
 
+from .behavior_analyzer import BehaviorAnalyzer
 from .config import AppConfig, RuntimeSettings
 from .constants import PERSON_CLASS_ID, get_class_name, get_detection_color
-from .feature_indexer import FeatureIndexer
 from .events_store import EventsStore
+from .feature_indexer import FeatureIndexer
 from .gpu_manager import GPUManager
 from .rules import Detection, Event, RulesEngine
-from .behavior_analyzer import BehaviorAnalyzer
 from .skeleton import Skeleton, SkeletonExtractor, SkeletonRenderer
-from .video_archiver import VideoClipRecorder
 from .tensorrt_utils import (
-    is_tensorrt_available,
-    TRTModelWrapper,
     TensorRTConverter,
+    TRTModelWrapper,
+    is_tensorrt_available,
 )
+from .video_archiver import VideoClipRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,34 @@ def _index_snapshot_features(
                 logger.debug("Feature indexing update failed: %s", e)
 
 
+def _overlaps_any_person(
+    box: dict[str, float],
+    person_boxes: list[tuple[float, float, float, float]],
+    min_iou: float = 0.1,
+) -> bool:
+    """True if `box` overlaps any tracked-person box above `min_iou`.
+
+    Used to discard full-frame fight-model detections that do not actually
+    coincide with a detected person.
+    """
+    bx1, by1, bx2, by2 = box["x1"], box["y1"], box["x2"], box["y2"]
+    barea = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    if barea <= 0:
+        return False
+    for px1, py1, px2, py2 in person_boxes:
+        ix1, iy1 = max(bx1, px1), max(by1, py1)
+        ix2, iy2 = min(bx2, px2), min(by2, py2)
+        iw, ih = ix2 - ix1, iy2 - iy1
+        if iw <= 0 or ih <= 0:
+            continue
+        inter = iw * ih
+        parea = max(0.0, px2 - px1) * max(0.0, py2 - py1)
+        union = barea + parea - inter
+        if union > 0 and inter / union >= min_iou:
+            return True
+    return False
+
+
 def _deduplicate_events(events: list[Event]) -> list[Event]:
     """Prefer skeleton events over bbox events for the same (event_type, track_id).
 
@@ -92,9 +120,10 @@ def _deduplicate_events(events: list[Event]) -> list[Event]:
 
     result: list[Event] = list(no_tid)
 
-    for key, group in groups.items():
+    for _key, group in groups.items():
         skeleton_events = [
-            e for e in group
+            e
+            for e in group
             if e.extra.get("detection_method", "").startswith("skeleton")
         ]
         if skeleton_events:
@@ -164,7 +193,9 @@ class DetectionPipeline:
                 self.model = None  # Don't load PyTorch model
                 logger.info(f"TensorRT engine loaded: {engine_path}")
             except Exception as e:
-                logger.warning(f"TensorRT initialization failed: {e}, falling back to PyTorch")
+                logger.warning(
+                    f"TensorRT initialization failed: {e}, falling back to PyTorch"
+                )
                 self._use_tensorrt = False
                 self._trt_model = None
 
@@ -180,8 +211,13 @@ class DetectionPipeline:
             cfg.fight_model_path, "fight detection"
         )
         self._model_secondary_frame_skip = 3
-        self._mllm_frame_skip = 5
+        self._mllm_frame_skip = 2
         self._mllm_frame_counter = 0
+        # Debounce for secondary-model events (suspicious/fight/intrusion):
+        # the nano activity classifier is noisy, so suppress repeat alarms of
+        # the same type within a cooldown window. Maps event_type -> last ts.
+        self._secondary_last_alarm: dict[str, float] = {}
+        self._secondary_debounce_s = 8.0
         self._stream_frame_skip = 1
         self._stream_frame_counter = 0
         self._runtime = RuntimeSettings(cfg)
@@ -226,7 +262,9 @@ class DetectionPipeline:
         self._init_mllm_sidecar()
 
         self._clip_recorder = VideoClipRecorder(
-            pre_seconds=8, post_seconds=4, clip_fps=15,
+            pre_seconds=8,
+            post_seconds=4,
+            clip_fps=15,
             output_dir=os.path.join(cfg.output_dir, "clips"),
         )
         logger.info("Video clip recorder initialized")
@@ -234,6 +272,7 @@ class DetectionPipeline:
     @staticmethod
     def _load_secondary_model(path: str, name: str) -> YOLO | None:
         import os
+
         if not path or not os.path.exists(path):
             logger.info(f"Secondary model '{name}': not found ({path})")
             return None
@@ -261,14 +300,20 @@ class DetectionPipeline:
             if crop.size == 0:
                 continue
             try:
-                preds = self._fall_model(crop, imgsz=640, verbose=False, device=self._device)
+                preds = self._fall_model(
+                    crop, imgsz=640, verbose=False, device=self._device
+                )
                 if preds and preds[0].boxes and len(preds[0].boxes) > 0:
                     best = preds[0].boxes.conf.argmax()
-                    results.append((
-                        i,
-                        self._fall_model.names.get(int(preds[0].boxes.cls[best].item()), "?"),
-                        float(preds[0].boxes.conf[best].item()),
-                    ))
+                    results.append(
+                        (
+                            i,
+                            self._fall_model.names.get(
+                                int(preds[0].boxes.cls[best].item()), "?"
+                            ),
+                            float(preds[0].boxes.conf[best].item()),
+                        )
+                    )
             except Exception as e:
                 logger.debug("Posture classification error: %s", e)
         return results
@@ -279,17 +324,28 @@ class DetectionPipeline:
             return []
         dets = []
         try:
-            preds = self._fight_model(frame, imgsz=640, verbose=False, device=self._device)
+            preds = self._fight_model(
+                frame, imgsz=640, verbose=False, device=self._device
+            )
             if preds and preds[0].boxes and len(preds[0].boxes) > 0:
                 for box in preds[0].boxes:
-                    cls_name = self._fight_model.names.get(int(box.cls.item()), "").lower()
+                    cls_name = self._fight_model.names.get(
+                        int(box.cls.item()), ""
+                    ).lower()
                     xyxy = box.xyxy[0].tolist()
                     conf = float(box.conf.item())
-                    dets.append({
-                        "bbox": {"x1": xyxy[0], "y1": xyxy[1], "x2": xyxy[2], "y2": xyxy[3]},
-                        "conf": conf,
-                        "class": cls_name,
-                    })
+                    dets.append(
+                        {
+                            "bbox": {
+                                "x1": xyxy[0],
+                                "y1": xyxy[1],
+                                "x2": xyxy[2],
+                                "y2": xyxy[3],
+                            },
+                            "conf": conf,
+                            "class": cls_name,
+                        }
+                    )
         except Exception as e:
             logger.debug("Fight model inference error: %s", e)
         return dets
@@ -297,6 +353,7 @@ class DetectionPipeline:
     def _init_alarm_engine(self) -> None:
         try:
             from backend.alarm_singleton import get_alarm_engine
+
             self._alarm_engine = get_alarm_engine()
             logger.info("Alarm engine integrated into pipeline")
         except Exception as e:
@@ -310,6 +367,23 @@ class DetectionPipeline:
             if self.cfg.mllm.enabled:
                 self._mllm_sidecar.initialize()
                 logger.info("MLLM sidecar integrated into pipeline")
+                # Wire the two-stage cascade: the sidecar's verdict feeds back
+                # into the alarm engine, and new alarms become SUSPECTED until
+                # reviewed. Only engage when alarm review is actually enabled.
+                if (
+                    self._alarm_engine is not None
+                    and self.cfg.mllm.alarm_enhance_enabled
+                ):
+                    self._alarm_engine.enable_review(
+                        shadow_mode=self.cfg.mllm.shadow_mode
+                    )
+                    self._mllm_sidecar.set_verdict_callback(
+                        self._alarm_engine.apply_verdict
+                    )
+                    logger.info(
+                        "Two-stage cascade wired (shadow_mode=%s)",
+                        self.cfg.mllm.shadow_mode,
+                    )
             else:
                 logger.info("MLLM sidecar disabled")
         except Exception as e:
@@ -326,7 +400,9 @@ class DetectionPipeline:
         if self._inference_scale < 1.0:
             new_w = int(w * self._inference_scale)
             new_h = int(h * self._inference_scale)
-            inference_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            inference_frame = cv2.resize(
+                frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR
+            )
         else:
             inference_frame = frame
 
@@ -352,7 +428,9 @@ class DetectionPipeline:
                     iou=self._runtime.iou,
                     imgsz=self.cfg.imgsz,
                     classes=self.cfg.classes if self.cfg.classes else None,
-                    tracker=f"{self.cfg.tracker}.yaml" if self.cfg.tracker else "bytetrack.yaml",
+                    tracker=f"{self.cfg.tracker}.yaml"
+                    if self.cfg.tracker
+                    else "bytetrack.yaml",
                     verbose=False,
                     device=self._device,
                     half=self._half,
@@ -395,15 +473,21 @@ class DetectionPipeline:
 
                 if should_process:
                     det_dicts: list[dict] = [
-                        {"bbox": {"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2},
-                         "track_id": d.track_id}
+                        {
+                            "bbox": {"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2},
+                            "track_id": d.track_id,
+                        }
                         for d in detections
                         if d.class_id == PERSON_CLASS_ID
                     ]
                     raw_skeletons = self._sk_extractor.extract(frame, det_dicts)
                     self._cached_raw_skeletons = raw_skeletons
                     sk_events, self._skeletons = self._behavior_analyzer.analyze(
-                        raw_skeletons, timestamp_s, frame_idx, h, w,
+                        raw_skeletons,
+                        timestamp_s,
+                        frame_idx,
+                        h,
+                        w,
                     )
                     self._cached_skeletons = self._skeletons
                     frame_events.extend(sk_events)
@@ -417,34 +501,55 @@ class DetectionPipeline:
                 self._perf_skeleton_ms = (time.time() - t_skel_start) * 1000
 
         # --- Secondary model inference (every N frames) ---
-        # Posture model disabled: per-person GPU inference produces no fused events
-        # and competes with main detector for GPU resources, causing frame drops
-        if frame_idx % self._model_secondary_frame_skip == 0:
+        # The secondary "activity" model is a full-frame nano classifier whose
+        # crime classes (theft, gun, kidnapping, ...) fire constantly on
+        # ordinary footage, so they are intentionally NOT emitted. Only the
+        # physical-fight classes are used, gated by rules.fight.enabled, and
+        # only when the detection overlaps a tracked person and does not span
+        # the whole frame (a frame-filling box is a classic false positive).
+        if (
+            self.cfg.rules.fight.enabled
+            and frame_idx % self._model_secondary_frame_skip == 0
+        ):
+            FIGHT_CONF_MIN = 0.55
+            FIGHT_CLASSES = ("violence", "fighting", "assaulting")
+            person_boxes = [
+                (d.x1, d.y1, d.x2, d.y2)
+                for d in detections
+                if d.class_id == PERSON_CLASS_ID
+            ]
+            frame_area = float(max(1, frame.shape[0] * frame.shape[1]))
             for fd in self._detect_fight_model(frame):
-                if fd["conf"] >= 0.3:
-                    cls = fd["class"]
-                    # Suspicious Activity 10-class model mapping
-                    if cls in ("violence", "fighting", "assaulting"):
-                        event_type = "fight"
-                    elif cls in ("man_with_gun", "man_with_knife", "knife", "gun",
-                                 "kidnapping", "theft", "theaf_robbery",
-                                 "terrorist_with_time_bomb"):
-                        # Weapon / crime detections only count as "intrusion"
-                        # when zones are actually configured; otherwise emit
-                        # a dedicated "suspicious" event type.
-                        if self.cfg.rules.intrusion.zones:
-                            event_type = "intrusion"
-                        else:
-                            event_type = "suspicious"
-                    else:
-                        continue
-                    frame_events.append(Event(
-                        event_type=event_type, timestamp_s=timestamp_s,
+                if fd["class"] not in FIGHT_CLASSES or fd["conf"] < FIGHT_CONF_MIN:
+                    continue
+                b = fd["bbox"]
+                # Reject boxes covering most of the frame (false positive).
+                box_area = max(0.0, b["x2"] - b["x1"]) * max(0.0, b["y2"] - b["y1"])
+                if box_area > 0.85 * frame_area:
+                    continue
+                # Require overlap with at least one tracked person.
+                if not _overlaps_any_person(b, person_boxes):
+                    continue
+
+                event_type = "fight"
+                last = self._secondary_last_alarm.get(event_type, -1e9)
+                if timestamp_s - last < self._secondary_debounce_s:
+                    continue
+                self._secondary_last_alarm[event_type] = timestamp_s
+
+                frame_events.append(
+                    Event(
+                        event_type=event_type,
+                        timestamp_s=timestamp_s,
                         frame_index=frame_idx,
-                        confidence=fd["conf"], bbox=fd["bbox"],
-                        extra={"detection_method": "model_suspicious",
-                               "model_class": cls},
-                    ))
+                        confidence=fd["conf"],
+                        bbox=b,
+                        extra={
+                            "detection_method": "model_suspicious",
+                            "model_class": fd["class"],
+                        },
+                    )
+                )
 
         # Feed frame to clip recorder (ring buffer for event-triggered recording)
         try:
@@ -469,9 +574,7 @@ class DetectionPipeline:
                 if self.cfg.save_snapshots and event.bbox:
                     ts_ms = int(timestamp_s * 1000)
                     tid_part = (
-                        f"_tid{event.track_id}"
-                        if event.track_id is not None
-                        else ""
+                        f"_tid{event.track_id}" if event.track_id is not None else ""
                     )
                     zone_part = f"_{event.zone_name}" if event.zone_name else ""
                     fn = f"{event.event_type}{zone_part}{tid_part}_{ts_ms}.jpg"
@@ -495,13 +598,18 @@ class DetectionPipeline:
 
                 # Attach skeleton keypoints to event extra data
                 if self._skeleton_enabled and event.track_id is not None:
-                    matching = [s for s in self._skeletons if s.track_id == event.track_id]
+                    matching = [
+                        s for s in self._skeletons if s.track_id == event.track_id
+                    ]
                     if matching:
                         skel = matching[0]
-                        event.extra.setdefault("skeleton_kps", [
-                            {"x": kp.x, "y": kp.y, "conf": kp.confidence}
-                            for kp in skel.keypoints
-                        ])
+                        event.extra.setdefault(
+                            "skeleton_kps",
+                            [
+                                {"x": kp.x, "y": kp.y, "conf": kp.confidence}
+                                for kp in skel.keypoints
+                            ],
+                        )
                         event.extra["skeleton_avg_conf"] = skel.average_confidence
 
                 batch.append((event, snapshot))
@@ -509,7 +617,7 @@ class DetectionPipeline:
 
             # Submit feature indexing for snapshots in background
             indexed: list[tuple[int, str]] = []
-            for event, snapshot in batch:
+            for _event, snapshot in batch:
                 if snapshot:
                     # Get the last inserted event id from record_batch
                     with self.store._lock:
@@ -528,32 +636,60 @@ class DetectionPipeline:
 
         if frame_events and self._alarm_engine:
             try:
-                self._alarm_engine.process_events(frame_events)
+                new_alarms = self._alarm_engine.process_events(frame_events)
+                # Second stage: hand each freshly created (SUSPECTED) alarm to
+                # the MLLM for review. The verdict callback will confirm/dismiss
+                # it asynchronously. We pass the triggering frame so the VLM
+                # looks at exactly the moment the alarm fired.
+                if new_alarms and self._mllm_sidecar is not None:
+                    for alarm in new_alarms:
+                        if alarm.status == "suspected":
+                            self._mllm_sidecar.review_alarm(
+                                alarm_id=alarm.id,
+                                event_type=alarm.event_type,
+                                alarm_details=alarm.description or alarm.event_type,
+                                frame=frame,
+                            )
             except Exception as e:
                 logger.warning("Alarm processing error: %s", e)
 
         if self._mllm_sidecar is not None:
-            self._mllm_frame_counter = (self._mllm_frame_counter + 1) % self._mllm_frame_skip
+            self._mllm_frame_counter = (
+                self._mllm_frame_counter + 1
+            ) % self._mllm_frame_skip
             if self._mllm_frame_counter == 0:
                 try:
                     det_dicts = [
-                        {"class_name": d.name, "confidence": d.conf, "bbox": (d.x1, d.y1, d.x2, d.y2)}
+                        {
+                            "class_name": d.name,
+                            "confidence": d.conf,
+                            "bbox": (d.x1, d.y1, d.x2, d.y2),
+                        }
                         for d in detections
                     ]
                     event_dicts = [
-                        {"type": e.event_type, "confidence": getattr(e, "confidence", 0)}
+                        {
+                            "type": e.event_type,
+                            "confidence": getattr(e, "confidence", 0),
+                        }
                         for e in frame_events
                     ]
                     self._mllm_sidecar.on_frame(
                         frame=frame, detections=det_dicts, events=event_dicts
                     )
                     scene = self._mllm_sidecar.last_scene_description or {}
-                    narrative = scene.get("narrative", "") or scene.get("scene_summary", "")
+                    narrative = scene.get("narrative", "") or scene.get(
+                        "scene_summary", ""
+                    )
                     if narrative and frame_events:
                         for evt in frame_events:
                             evt.extra.setdefault("mllm_narrative", narrative)
-                            evt.extra.setdefault("mllm_risk_level", scene.get("risk_level", ""))
-                            evt.extra.setdefault("mllm_action", scene.get("suggested_action", ""))
+                            evt.extra.setdefault(
+                                "mllm_risk_level", scene.get("risk_level", "")
+                            )
+                            evt.extra.setdefault(
+                                "mllm_action", scene.get("suggested_action", "")
+                            )
                 except Exception as e:
                     logger.warning("MLLM sidecar frame error: %s", e)
 
@@ -570,6 +706,7 @@ class DetectionPipeline:
 
     def _wrap_trt_results(self, trt_results: list[dict], img_shape: tuple[int, int]):
         """Wrap TensorRT detection results to match Ultralytics Results API."""
+
         class _TRTResults:
             def __init__(self, detections, shape):
                 self.boxes = _TRTBoxes(detections, shape)
@@ -578,11 +715,18 @@ class DetectionPipeline:
         class _TRTBoxes:
             def __init__(self, detections, shape):
                 import torch
+
                 self._shape = shape
                 if detections:
-                    self.xyxy = torch.tensor([d["box"] for d in detections], dtype=torch.float32)
-                    self.conf = torch.tensor([d["conf"] for d in detections], dtype=torch.float32)
-                    self.cls = torch.tensor([d["cls"] for d in detections], dtype=torch.float32)
+                    self.xyxy = torch.tensor(
+                        [d["box"] for d in detections], dtype=torch.float32
+                    )
+                    self.conf = torch.tensor(
+                        [d["conf"] for d in detections], dtype=torch.float32
+                    )
+                    self.cls = torch.tensor(
+                        [d["cls"] for d in detections], dtype=torch.float32
+                    )
                     self.id = None  # TensorRT doesn't do tracking natively
                 else:
                     self.xyxy = torch.empty((0, 4), dtype=torch.float32)
@@ -608,18 +752,33 @@ class DetectionPipeline:
         if self._gpu_mgr.is_cuda:
             try:
                 with torch.no_grad():
-                    all_data = torch.cat([
-                        boxes.xyxy,
-                        boxes.conf.unsqueeze(-1) if boxes.conf is not None else torch.full((len(boxes), 1), 1.0, device=boxes.xyxy.device),
-                        boxes.cls.unsqueeze(-1) if boxes.cls is not None else torch.zeros((len(boxes), 1), device=boxes.xyxy.device),
-                    ], dim=1)
+                    all_data = torch.cat(
+                        [
+                            boxes.xyxy,
+                            boxes.conf.unsqueeze(-1)
+                            if boxes.conf is not None
+                            else torch.full(
+                                (len(boxes), 1), 1.0, device=boxes.xyxy.device
+                            ),
+                            boxes.cls.unsqueeze(-1)
+                            if boxes.cls is not None
+                            else torch.zeros((len(boxes), 1), device=boxes.xyxy.device),
+                        ],
+                        dim=1,
+                    )
                     ids_tensor = boxes.id if boxes.id is not None else None
                     np_data = all_data.cpu().numpy()
-                    np_ids = ids_tensor.cpu().numpy() if ids_tensor is not None else None
+                    np_ids = (
+                        ids_tensor.cpu().numpy() if ids_tensor is not None else None
+                    )
 
                 for i in range(len(np_data)):
                     row = np_data[i]
-                    track_id = int(np_ids[i]) if np_ids is not None and np_ids[i] is not None else None
+                    track_id = (
+                        int(np_ids[i])
+                        if np_ids is not None and np_ids[i] is not None
+                        else None
+                    )
                     detections.append(
                         Detection(
                             track_id=track_id,
@@ -633,10 +792,14 @@ class DetectionPipeline:
                     )
                 return detections
             except Exception as e:
-                logger.debug("GPU detection extraction failed, falling back to CPU: %s", e)
+                logger.debug(
+                    "GPU detection extraction failed, falling back to CPU: %s", e
+                )
 
         xyxy = boxes.xyxy.cpu().numpy()
-        confs = boxes.conf.cpu().numpy() if boxes.conf is not None else [1.0] * len(xyxy)
+        confs = (
+            boxes.conf.cpu().numpy() if boxes.conf is not None else [1.0] * len(xyxy)
+        )
         clss = boxes.cls.cpu().numpy() if boxes.cls is not None else [0] * len(xyxy)
         ids = boxes.id.cpu().numpy() if boxes.id is not None else [None] * len(xyxy)
 
@@ -746,7 +909,7 @@ class DetectionPipeline:
         """Get current pipeline statistics."""
         elapsed = time.time() - self._start_time if self._start_time else 0
         fps = self._frame_count / max(1e-3, elapsed) if self._frame_count > 0 else 0.0
-        
+
         # 确保 FPS 值是有限数字，避免 JSON 序列化错误
         if not (0 <= fps < 1e6):
             fps = 0.0
@@ -755,9 +918,13 @@ class DetectionPipeline:
         if len(self._perf_fps_history) > 60:
             self._perf_fps_history = self._perf_fps_history[-60:]
 
-        avg_fps = sum(self._perf_fps_history) / len(self._perf_fps_history) if self._perf_fps_history else 0.0
+        avg_fps = (
+            sum(self._perf_fps_history) / len(self._perf_fps_history)
+            if self._perf_fps_history
+            else 0.0
+        )
         min_fps = min(self._perf_fps_history) if self._perf_fps_history else 0.0
-        
+
         # 确保所有 FPS 值都是有限数字
         avg_fps = max(0.0, min(avg_fps, 1e6))
         min_fps = max(0.0, min(min_fps, 1e6))
@@ -786,7 +953,9 @@ class DetectionPipeline:
                 "tensorrt_enabled": self._use_tensorrt,
             },
             "gpu": self._gpu_mgr.get_status_dict(),
-            "mllm": self._mllm_sidecar.get_stats() if self._mllm_sidecar else {"enabled": False},
+            "mllm": self._mllm_sidecar.get_stats()
+            if self._mllm_sidecar
+            else {"enabled": False},
         }
 
     def start(self) -> None:
@@ -811,7 +980,7 @@ class DetectionPipeline:
             except Exception as e:
                 logger.warning(f"Error releasing TensorRT model: {e}")
 
-        if hasattr(self, 'model') and self.model is not None:
+        if hasattr(self, "model") and self.model is not None:
             try:
                 self.model.cpu()
                 del self.model
@@ -819,7 +988,7 @@ class DetectionPipeline:
             except Exception as e:
                 logger.warning(f"Error releasing model: {e}")
 
-        if hasattr(self, '_snapshot_executor') and self._snapshot_executor:
+        if hasattr(self, "_snapshot_executor") and self._snapshot_executor:
             try:
                 self._snapshot_executor.shutdown(wait=False)
             except Exception as e:
@@ -839,7 +1008,9 @@ class DetectionPipeline:
         try:
             if self._use_tensorrt and self._trt_model is not None:
                 # TensorRT warmup
-                dummy = np.random.randint(0, 255, (self.cfg.imgsz, self.cfg.imgsz, 3), dtype=np.uint8)
+                dummy = np.random.randint(
+                    0, 255, (self.cfg.imgsz, self.cfg.imgsz, 3), dtype=np.uint8
+                )
                 for _ in range(2):
                     self._trt_model.predict(dummy, verbose=False)
                 logger.info("TensorRT warmup completed (2 dummy inferences)")
@@ -850,7 +1021,9 @@ class DetectionPipeline:
                 torch.backends.cudnn.benchmark = True
                 logger.info("cuDNN benchmark mode enabled for device: %s", self._device)
 
-            dummy = np.random.randint(0, 255, (self.cfg.imgsz, self.cfg.imgsz, 3), dtype=np.uint8)
+            dummy = np.random.randint(
+                0, 255, (self.cfg.imgsz, self.cfg.imgsz, 3), dtype=np.uint8
+            )
             for _ in range(2):  # 优化：从3次减少到2次，足够完成GPU预热
                 self.model.predict(
                     dummy,
@@ -870,7 +1043,9 @@ class DetectionPipeline:
         sidecar config if active.
         """
         from dataclasses import replace
-        self.cfg = replace(self.cfg,
+
+        self.cfg = replace(
+            self.cfg,
             device=new_cfg.device,
             imgsz=new_cfg.imgsz,
             conf=new_cfg.conf,
@@ -905,7 +1080,9 @@ class DetectionPipeline:
         old_quality = self._jpeg_quality
         self._jpeg_quality = max(30, min(95, quality))
         if old_quality != self._jpeg_quality:
-            logger.debug("JPEG quality changed: %d -> %d", old_quality, self._jpeg_quality)
+            logger.debug(
+                "JPEG quality changed: %d -> %d", old_quality, self._jpeg_quality
+            )
 
     def get_encoding_quality(self) -> int:
         """Get current JPEG encoding quality setting.

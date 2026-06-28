@@ -7,9 +7,7 @@ These tests verify core API behaviors including path traversal prevention,
 file upload validation, and proper error handling.
 """
 
-import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -36,8 +34,10 @@ class TestSecurityPathTraversal:
         """Relative paths within models dir should be allowed."""
         from backend.security import validate_model_path
 
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.is_relative_to", return_value=True):
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_relative_to", return_value=True),
+        ):
             is_valid, _ = validate_model_path("yolo12n.pt", "/project/models")
             assert is_valid
 
@@ -45,7 +45,9 @@ class TestSecurityPathTraversal:
 class TestSecurityFileUpload:
     """Tests for file upload validation."""
 
-    @pytest.mark.parametrize("ext", [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"])
+    @pytest.mark.parametrize(
+        "ext", [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"]
+    )
     def test_allows_valid_video_extensions(self, ext):
         """Valid video extensions should be accepted."""
         from backend.security import validate_upload_extension
@@ -53,7 +55,9 @@ class TestSecurityFileUpload:
         is_valid, _ = validate_upload_extension(f"video{ext}")
         assert is_valid
 
-    @pytest.mark.parametrize("ext", [".exe", ".bat", ".sh", ".php", ".html", ".js", ".py"])
+    @pytest.mark.parametrize(
+        "ext", [".exe", ".bat", ".sh", ".php", ".html", ".js", ".py"]
+    )
     def test_rejects_dangerous_extensions(self, ext):
         """Dangerous file extensions should be rejected."""
         from backend.security import validate_upload_extension

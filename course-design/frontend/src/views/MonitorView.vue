@@ -27,12 +27,7 @@
             />
           </el-option-group>
           <el-option-group label="已上传视频">
-            <el-option
-              v-for="f in uploadedFiles"
-              :key="f.path"
-              :label="f.name"
-              :value="f.path"
-            />
+            <el-option v-for="f in uploadedFiles" :key="f.path" :label="f.name" :value="f.path" />
             <el-option label="+ 上传新视频" value="file" />
           </el-option-group>
         </el-select>
@@ -101,15 +96,23 @@
           </div>
           <StatusBadge
             v-if="perfData"
-            :status="perfData.device === 'cuda:0' ? 'online' : perfData.device === 'mps' ? 'warning' : 'offline'"
-            :label="perfData.device === 'cuda:0' ? 'GPU' : perfData.device === 'mps' ? 'MPS' : 'CPU'"
+            :status="
+              perfData.device === 'cuda:0'
+                ? 'online'
+                : perfData.device === 'mps'
+                  ? 'warning'
+                  : 'offline'
+            "
+            :label="
+              perfData.device === 'cuda:0' ? 'GPU' : perfData.device === 'mps' ? 'MPS' : 'CPU'
+            "
           />
           <el-tag
             v-if="uploadedFile"
             size="small"
             closable
-            @close="clearUploadedFile"
             class="file-tag"
+            @close="clearUploadedFile"
           >
             {{ uploadedFile.name }}
           </el-tag>
@@ -134,10 +137,19 @@
         :limit="10"
       >
         <div class="upload-area">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--color-primary)"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <div class="upload-text">拖拽或点击选择视频文件</div>
         </div>
@@ -151,7 +163,7 @@
         <el-progress :percentage="uploadProgress" :stroke-width="6" :show-text="false" />
       </div>
       <template #footer>
-        <el-button @click="showUpload = false; selectedFile = null">取消</el-button>
+        <el-button @click="cancelUpload">取消</el-button>
         <el-button
           type="primary"
           :disabled="!selectedFile || uploadProgress > 0 || uploading"
@@ -178,15 +190,37 @@
         <div class="mllm-header">
           <div class="header-title-group">
             <span class="mllm-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-right: 6px; vertical-align: -2px"
+              >
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
               MLLM 场景理解
             </span>
           </div>
           <StatusBadge
-            :status="mllmData.stats.enabled && mllmData.stats.running ? 'online' : mllmData.stats.enabled ? 'warning' : 'offline'"
-            :label="mllmData.stats.enabled && mllmData.stats.running ? '运行中' : mllmData.stats.enabled ? '已配置' : '未启用'"
+            :status="
+              mllmData.stats.enabled && mllmData.stats.running
+                ? 'online'
+                : mllmData.stats.enabled
+                  ? 'warning'
+                  : 'offline'
+            "
+            :label="
+              mllmData.stats.enabled && mllmData.stats.running
+                ? '运行中'
+                : mllmData.stats.enabled
+                  ? '已配置'
+                  : '未启用'
+            "
           />
           <el-switch
             v-if="mllmData"
@@ -194,8 +228,8 @@
             size="small"
             active-text="开"
             inactive-text="关"
-            @change="toggleMLLM"
             class="mllm-toggle"
+            @change="toggleMLLM"
           />
         </div>
       </template>
@@ -218,7 +252,11 @@
           </div>
         </div>
         <div
-          v-if="mllmData.stats.running && mllmData.stats.last_scene && mllmData.stats.last_scene.scene_summary"
+          v-if="
+            mllmData.stats.running &&
+            mllmData.stats.last_scene &&
+            mllmData.stats.last_scene.scene_summary
+          "
           class="mllm-scene"
         >
           <el-tag
@@ -235,7 +273,9 @@
             {{ mllmData.stats.last_scene.activity_type }}
           </el-tag>
           <span class="mllm-summary">{{ mllmData.stats.last_scene.scene_summary }}</span>
-          <p v-if="mllmData.stats.last_scene.narrative" class="mllm-narrative">{{ mllmData.stats.last_scene.narrative }}</p>
+          <p v-if="mllmData.stats.last_scene.narrative" class="mllm-narrative">
+            {{ mllmData.stats.last_scene.narrative }}
+          </p>
         </div>
       </div>
       <div v-else class="mllm-disabled">
@@ -248,29 +288,61 @@
       <template #header>
         <div class="events-header">
           <span class="events-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="margin-right: 6px; vertical-align: -2px"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
             </svg>
             实时事件
           </span>
           <el-button size="small" text @click="loadEvents">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-              <polyline points="23 4 23 10 17 10"/>
-              <polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="margin-right: 4px; vertical-align: -2px"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
             刷新
           </el-button>
         </div>
       </template>
-      <el-table :data="recentEvents" size="small" max-height="200" stripe :show-header="true" class="events-table">
+      <el-table
+        :data="recentEvents"
+        size="small"
+        max-height="200"
+        stripe
+        :show-header="true"
+        class="events-table"
+      >
         <el-table-column prop="event_type" label="类型" width="110">
           <template #default="{ row }">
-            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="dark" class="event-tag">
+            <el-tag
+              :type="eventTypeColor(row.event_type)"
+              size="small"
+              effect="dark"
+              class="event-tag"
+            >
               {{ eventTypeLabel(row.event_type) }}
             </el-tag>
           </template>
@@ -296,7 +368,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Upload, Refresh, VideoPlay, VideoPause, Loading } from '@element-plus/icons-vue'
+import { VideoPlay, VideoPause, Loading } from '@element-plus/icons-vue'
 import { camerasAPI, detectionAPI, eventsAPI, mllmAPI } from '../api/client'
 import { logger } from '../utils/logger'
 import { useWebSocket } from '../composables/useWebSocket'
@@ -304,7 +376,6 @@ import { eventTypeColor, formatTime, eventTypeLabel } from '../utils/helpers'
 import PageHeader from '../components/PageHeader.vue'
 import StreamPlayer from '../components/StreamPlayer.vue'
 import StatusBadge from '../components/StatusBadge.vue'
-import ActionButton from '../components/ActionButton.vue'
 
 const source = ref('0')
 const cameras = ref([])
@@ -410,6 +481,11 @@ const onFileChange = (file) => {
   selectedFile.value = file.raw
 }
 
+const cancelUpload = () => {
+  showUpload.value = false
+  selectedFile.value = null
+}
+
 const clearUploadedFile = async () => {
   if (detectionRunning.value) {
     await stopDetection()
@@ -439,7 +515,7 @@ const confirmUpload = async () => {
     const fileInfo = { name: selectedFile.value.name, path: res.path }
     source.value = res.path
     uploadedFile.value = fileInfo
-    if (!uploadedFiles.value.find(f => f.path === res.path)) {
+    if (!uploadedFiles.value.find((f) => f.path === res.path)) {
       uploadedFiles.value.push(fileInfo)
     }
     showUpload.value = false
@@ -451,16 +527,17 @@ const confirmUpload = async () => {
   } catch (e) {
     uploadProgress.value = 0
     uploading.value = false
-    const msg = e?.response?.data?.message || e?.message || '上传失败，请检查网络和文件大小（最大 100MB）'
+    const msg =
+      e?.response?.data?.message || e?.message || '上传失败，请检查网络和文件大小（最大 100MB）'
     ElMessage.error(msg)
   }
 }
 
 const startDetection = async () => {
   if (switchingMode.value) return
-  
+
   let loadingMsg = null
-  
+
   try {
     if (detectionRunning.value) {
       switchingMode.value = true
@@ -476,30 +553,30 @@ const startDetection = async () => {
       }
       streamUrl.value = ''
       logger.log('Current detection stopped successfully')
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise((resolve) => setTimeout(resolve, 300))
       detectionRunning.value = false
     }
-    
+
     starting.value = true
     const src = uploadedFile.value ? uploadedFile.value.path : source.value
     logger.log('Starting detection on source:', src)
-    
+
     loadingMsg = ElMessage({
       message: '正在启动检测，请稍候...',
       type: 'info',
       duration: 0,
       showClose: false,
     })
-    
+
     const res = await detectionAPI.start(src)
-    
+
     if (res.status === 'started') {
       detectionLoading.value = true
       startupProgress.value = { step: 'init', message: '正在初始化检测...', percent: 5 }
       _streamCounter.value++
       streamUrl.value = `/api/detection/stream.mjpg?_=${_streamCounter.value}&t=${Date.now()}`
       connectWebSocket()
-      
+
       if (loadingMsg) loadingMsg.close()
       logger.log('Detection started, waiting for pipeline to be ready...', src)
       _startProgressPolling()
@@ -515,12 +592,14 @@ const startDetection = async () => {
     logger.error('Failed to start detection:', e)
     const errorDetail = e.response?.data?.detail || '请检查后端服务'
     const cameraKeywords = ['摄像头', '相机', 'camera', 'video source', '视频源', '无法打开']
-    const isCameraError = cameraKeywords.some(kw =>
+    const isCameraError = cameraKeywords.some((kw) =>
       errorDetail.toLowerCase().includes(kw.toLowerCase())
     )
     ElMessage.error({
       message: isCameraError
-        ? '摄像头初始化失败：' + errorDetail + '\n请检查：1.摄像头连接 2.Windows隐私设置 3.设备管理器'
+        ? '摄像头初始化失败：' +
+          errorDetail +
+          '\n请检查：1.摄像头连接 2.Windows隐私设置 3.设备管理器'
         : '启动检测失败：' + errorDetail,
       duration: isCameraError ? 10000 : 5000,
     })
@@ -544,7 +623,7 @@ const _startProgressPolling = () => {
       if (progress && progress.step) {
         startupProgress.value = progress
       }
-    } catch (e) {
+    } catch {
       // ignore progress fetch errors
     }
   }, 1200)
@@ -571,7 +650,9 @@ const onStreamError = async (e) => {
         mjpegRetryCount = 0
         return
       }
-    } catch (_) {}
+    } catch {
+      // ignore status fetch errors during stream recovery
+    }
 
     scheduleRetry()
     ElMessage.warning('视频流中断，正在尝试恢复...')
@@ -609,6 +690,7 @@ const handleWebSocketMessage = (msg) => {
         const status = msg.data
         if ((detectionLoading.value || detectionRunning.value) && !status.running) {
           if (status.state === 'loading' || status.state === 'loading_timeout') {
+            // no-op: still loading
           } else {
             if (status.last_error) {
               ElMessage.error('检测异常停止: ' + status.last_error)
@@ -702,15 +784,6 @@ const loadEvents = async () => {
   }
 }
 
-const fetchGPUStatus = async () => {
-  try {
-    const res = await fetch('/api/detection/gpu')
-    gpuStatus.value = await res.json()
-  } catch (e) {
-    logger.error('Failed to fetch GPU status:', e)
-  }
-}
-
 const fetchMLLMStatus = async () => {
   try {
     mllmData.value = await mllmAPI.status()
@@ -726,7 +799,7 @@ const toggleMLLM = async (enabled) => {
       ElMessage.success(enabled ? 'AI 场景理解已开启' : 'AI 场景理解已关闭')
       fetchMLLMStatus()
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('切换 MLLM 状态失败')
   }
 }
@@ -736,6 +809,7 @@ const pollStatus = async () => {
     const status = await detectionAPI.status()
     if ((detectionLoading.value || detectionRunning.value) && !status.running) {
       if (status.state === 'loading' || status.state === 'loading_timeout') {
+        // no-op: still loading
       } else {
         if (status.last_error) {
           ElMessage.error('检测异常停止: ' + status.last_error)
@@ -840,10 +914,14 @@ function _verifyStartup(src, delayMs = 3000) {
               uploadedFile.value = null
               selectedFile.value = null
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }, 5000)
       }
-    } catch { /* 网络错误忽略，由轮询兜底 */ }
+    } catch {
+      /* 网络错误忽略，由轮询兜底 */
+    }
   }, delayMs)
 }
 
@@ -892,12 +970,18 @@ onMounted(async () => {
   }
   _schedulePoll()
 
-  statusInterval = { cleanup: () => { if (_pollTimer) clearTimeout(_pollTimer) } }
+  statusInterval = {
+    cleanup: () => {
+      if (_pollTimer) clearTimeout(_pollTimer)
+    },
+  }
 
   // Reset retry count on successful load
   const img = document.querySelector('.stream-img')
   if (img) {
-    img.addEventListener('load', () => { mjpegRetryCount = 0 })
+    img.addEventListener('load', () => {
+      mjpegRetryCount = 0
+    })
   }
 })
 
@@ -909,7 +993,10 @@ onUnmounted(() => {
       clearInterval(statusInterval)
     }
   }
-  if (_startupTimer) { clearTimeout(_startupTimer); _startupTimer = null }
+  if (_startupTimer) {
+    clearTimeout(_startupTimer)
+    _startupTimer = null
+  }
   if (mjpegRetryTimer) {
     clearTimeout(mjpegRetryTimer)
     mjpegRetryTimer = null
@@ -1212,13 +1299,23 @@ onUnmounted(() => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Responsive */

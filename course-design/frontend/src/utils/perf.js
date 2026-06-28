@@ -37,7 +37,6 @@ export async function measure(fn, label) {
   const result = await fn()
   const duration = performance.now() - start
   if (duration > 16) {
-    // eslint-disable-next-line no-console
     console.warn(`[Perf] ${label}: ${duration.toFixed(1)}ms`)
   }
   return result

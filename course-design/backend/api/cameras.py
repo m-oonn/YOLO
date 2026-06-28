@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import time
+
 from fastapi import APIRouter
 
 router = APIRouter()
@@ -39,6 +40,7 @@ def list_cameras():
 def get_camera_info(camera_id: int):
     """Get information about a specific camera."""
     import cv2  # lazy import — cv2 is a heavy C extension
+
     try:
         cap = cv2.VideoCapture(camera_id)
         if not cap.isOpened():

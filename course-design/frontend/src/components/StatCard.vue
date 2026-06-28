@@ -1,5 +1,9 @@
 <template>
-  <div class="stat-card" :class="{ 'stat-loading': loading, 'stat-animated': animated }" :style="cardStyle">
+  <div
+    class="stat-card"
+    :class="{ 'stat-loading': loading, 'stat-animated': animated }"
+    :style="cardStyle"
+  >
     <div class="stat-glow" :style="glowStyle" />
     <div class="stat-body">
       <div class="stat-left">
@@ -10,7 +14,11 @@
           </span>
           <span v-if="unit" class="stat-unit">{{ unit }}</span>
         </div>
-        <span v-if="trend !== undefined" class="stat-trend" :class="trend >= 0 ? 'trend-up' : 'trend-down'">
+        <span
+          v-if="trend !== undefined"
+          class="stat-trend"
+          :class="trend >= 0 ? 'trend-up' : 'trend-down'"
+        >
           {{ trend >= 0 ? '↑' : '↓' }} {{ Math.abs(trend) }}%
         </span>
       </div>
@@ -198,8 +206,13 @@ const displayValue = computed(() => {
 }
 
 @keyframes value-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 @media (max-width: 768px) {

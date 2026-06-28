@@ -15,6 +15,7 @@ Unified class mapping:
 
 Output: datasets/fpds_yolo/{images,labels}/{train,val}/
 """
+
 from __future__ import annotations
 
 import shutil
@@ -99,7 +100,12 @@ def main() -> int:
                 total_skipped += 1
                 continue
             new_name = f"fpds_{split_name}_{png.name}"
-            if convert_one(png, txt, out_img_dir / new_name, out_lbl_dir / (new_name.replace(".png", ".txt"))):
+            if convert_one(
+                png,
+                txt,
+                out_img_dir / new_name,
+                out_lbl_dir / (new_name.replace(".png", ".txt")),
+            ):
                 total += 1
         print(f"  {split_name}: done")
 
@@ -118,7 +124,12 @@ def main() -> int:
                 total_skipped += 1
                 continue
             new_name = f"fpds_{split_name}_{png.name}"
-            if convert_one(png, txt, out_img_dir / new_name, out_lbl_dir / (new_name.replace(".png", ".txt"))):
+            if convert_one(
+                png,
+                txt,
+                out_img_dir / new_name,
+                out_lbl_dir / (new_name.replace(".png", ".txt")),
+            ):
                 total += 1
         print(f"  {split_name}: done")
 

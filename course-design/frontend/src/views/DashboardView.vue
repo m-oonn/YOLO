@@ -31,8 +31,13 @@
         :loading="loading"
       >
         <template #footer>
-          <span class="stat-meta" v-if="eventsByType.length > 0">
-            {{ eventsByType.slice(0, 3).map(t => `${t.label} ${t.count}`).join(' · ') }}
+          <span v-if="eventsByType.length > 0" class="stat-meta">
+            {{
+              eventsByType
+                .slice(0, 3)
+                .map((t) => `${t.label} ${t.count}`)
+                .join(' · ')
+            }}
           </span>
         </template>
       </StatCard>
@@ -46,7 +51,9 @@
       >
         <template #footer>
           <span class="stat-meta">
-            <span v-if="criticalAlarms > 0" class="meta-badge meta-danger">{{ criticalAlarms }} 紧急</span>
+            <span v-if="criticalAlarms > 0" class="meta-badge meta-danger">
+              {{ criticalAlarms }} 紧急
+            </span>
             <span v-else class="meta-badge meta-success">正常</span>
           </span>
         </template>
@@ -71,7 +78,10 @@
         :loading="loading"
       >
         <template #footer>
-          <StatusBadge :status="detectionRunning ? 'online' : 'offline'" :label="detectionRunning ? '检测运行中' : '已停止'" />
+          <StatusBadge
+            :status="detectionRunning ? 'online' : 'offline'"
+            :label="detectionRunning ? '检测运行中' : '已停止'"
+          />
         </template>
       </StatCard>
     </div>
@@ -84,7 +94,9 @@
             <div class="card-header">
               <div class="header-title-group">
                 <span class="card-title">实时画面</span>
-                <span class="card-subtitle">{{ detectionRunning ? '正在实时检测' : '检测未启动' }}</span>
+                <span class="card-subtitle">
+                  {{ detectionRunning ? '正在实时检测' : '检测未启动' }}
+                </span>
               </div>
               <div class="card-actions">
                 <StatusBadge
@@ -122,9 +134,18 @@
           </template>
           <div v-if="recentAlarms.length === 0" class="empty-state">
             <div class="empty-icon">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-disabled)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                <polyline points="22 4 12 14.01 9 11.01"/>
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-disabled)"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
             </div>
             <p class="empty-title">暂无活跃告警</p>
@@ -139,7 +160,10 @@
               @click="goToAlarms"
             >
               <div class="alert-left">
-                <span class="alert-dot" :class="`dot-${alarm.level === 3 ? 'danger' : alarm.level === 2 ? 'warning' : 'info'}`" />
+                <span
+                  class="alert-dot"
+                  :class="`dot-${alarm.level === 3 ? 'danger' : alarm.level === 2 ? 'warning' : 'info'}`"
+                />
                 <div class="alert-info">
                   <span class="alert-type">{{ eventTypeLabel(alarm.event_type) }}</span>
                   <span class="alert-desc">{{ alarm.description || alarm.event_type }}</span>
@@ -164,10 +188,22 @@
         </div>
       </template>
       <SkeletonLoader v-if="loading" type="table" :rows="3" />
-      <el-table v-else :data="recentEvents" stripe style="width: 100%" @row-click="goToEvents" class="dashboard-table">
+      <el-table
+        v-else
+        :data="recentEvents"
+        stripe
+        style="width: 100%"
+        class="dashboard-table"
+        @row-click="goToEvents"
+      >
         <el-table-column prop="event_type" label="类型" width="110">
           <template #default="{ row }">
-            <el-tag :type="eventTypeColor(row.event_type)" size="small" effect="dark" class="event-tag">
+            <el-tag
+              :type="eventTypeColor(row.event_type)"
+              size="small"
+              effect="dark"
+              class="event-tag"
+            >
               {{ eventTypeLabel(row.event_type) }}
             </el-tag>
           </template>
@@ -263,8 +299,14 @@ const onWsMessage = (msg) => {
   }
   if (msg.type === 'gpu' && msg.data) {
     gpuName.value = msg.data.gpu_name || msg.data.name || gpuName.value
-    const used = msg.data.gpu_used_memory_mb !== undefined ? msg.data.gpu_used_memory_mb : msg.data.memory_used_mb
-    const total = msg.data.gpu_total_memory_mb !== undefined ? msg.data.gpu_total_memory_mb : msg.data.memory_total_mb
+    const used =
+      msg.data.gpu_used_memory_mb !== undefined
+        ? msg.data.gpu_used_memory_mb
+        : msg.data.memory_used_mb
+    const total =
+      msg.data.gpu_total_memory_mb !== undefined
+        ? msg.data.gpu_total_memory_mb
+        : msg.data.memory_total_mb
     if (used !== undefined && total !== undefined) {
       gpuMemory.value = `${used}MB / ${total}MB`
     }
@@ -303,7 +345,7 @@ const loadDashboardData = async () => {
 
     recentEvents.value = (eList.items || []).slice(0, 5)
     recentAlarms.value = (aStats.recent || []).slice(0, 5)
-  } catch (err) {
+  } catch {
     // silently fail for dashboard initial load
   } finally {
     loading.value = false
@@ -316,7 +358,7 @@ const loadAlarms = async () => {
     activeAlarms.value = aStats.active_count || 0
     criticalAlarms.value = aStats.critical_count || 0
     recentAlarms.value = (aStats.recent || []).slice(0, 5)
-  } catch (err) {
+  } catch {
     // ignore
   }
 }
@@ -339,9 +381,7 @@ onMounted(async () => {
     const h = Math.floor(uptimeSeconds.value / 3600)
     const m = Math.floor((uptimeSeconds.value % 3600) / 60)
     const s = uptimeSeconds.value % 60
-    systemUptime.value = h > 0
-      ? `${h}h ${m}m ${s}s`
-      : m > 0 ? `${m}m ${s}s` : `${s}s`
+    systemUptime.value = h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`
   }, 1000)
 
   statusPoll = setInterval(loadDashboardData, 5000)
@@ -389,9 +429,15 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.dot-success { background: var(--color-success); }
-.dot-warning { background: var(--color-warning); }
-.dot-danger { background: var(--color-danger); }
+.dot-success {
+  background: var(--color-success);
+}
+.dot-warning {
+  background: var(--color-warning);
+}
+.dot-danger {
+  background: var(--color-danger);
+}
 
 .meta-badge {
   padding: 2px 8px;
@@ -516,9 +562,16 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.dot-danger { background: var(--color-danger); box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
-.dot-warning { background: var(--color-warning); }
-.dot-info { background: var(--color-info); }
+.dot-danger {
+  background: var(--color-danger);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+.dot-warning {
+  background: var(--color-warning);
+}
+.dot-info {
+  background: var(--color-info);
+}
 
 .alert-info {
   flex: 1;

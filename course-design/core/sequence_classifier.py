@@ -63,8 +63,13 @@ class LSTMBranch:
     Architecture: TemporalConv → LSTM(64→32) → FC(32→16→3)
     """
 
-    def __init__(self, input_dim: int = 86, hidden_dim: int = 32,
-                 num_classes: int = 3, num_layers: int = 1):
+    def __init__(
+        self,
+        input_dim: int = 86,
+        hidden_dim: int = 32,
+        num_classes: int = 3,
+        num_layers: int = 1,
+    ):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.num_classes = num_classes
@@ -80,14 +85,17 @@ class LSTMBranch:
         """Load ONNX model for inference."""
         try:
             import onnxruntime as ort
+
             providers = (
-                ['CUDAExecutionProvider', 'CPUExecutionProvider']
-                if self._device == 'cuda'
-                else ['CPUExecutionProvider']
+                ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                if self._device == "cuda"
+                else ["CPUExecutionProvider"]
             )
             self._session = ort.InferenceSession(model_path, providers=providers)
             self._loaded = True
-            logger.info("LSTM model loaded from %s (providers: %s)", model_path, providers)
+            logger.info(
+                "LSTM model loaded from %s (providers: %s)", model_path, providers
+            )
             return True
         except ImportError:
             logger.warning("onnxruntime not installed, using dummy classifier")
@@ -108,7 +116,9 @@ class LSTMBranch:
         if self._loaded:
             try:
                 input_name = self._session.get_inputs()[0].name
-                probs = self._session.run(None, {input_name: sequence[np.newaxis, ...].astype(np.float32)})[0]
+                probs = self._session.run(
+                    None, {input_name: sequence[np.newaxis, ...].astype(np.float32)}
+                )[0]
                 class_id = int(np.argmax(probs[0]))
                 confidence = float(probs[0][class_id])
                 return class_id, confidence
@@ -144,8 +154,9 @@ class ModelInferenceEngine:
         if self.enabled and config.model_path:
             self.classifier.load_onnx(config.model_path)
 
-    def infer(self, track_id: int, features: np.ndarray
-              ) -> tuple[int, float, str | None]:
+    def infer(
+        self, track_id: int, features: np.ndarray
+    ) -> tuple[int, float, str | None]:
         """Run inference on feature sequence for a track.
 
         Args:
@@ -173,8 +184,12 @@ class ModelInferenceEngine:
         event_type = event_map.get(class_id)
 
         if event_type and self.shadow_mode:
-            logger.info("Shadow mode: detected %s (conf=%.2f) for track %d",
-                        event_type, confidence, track_id)
+            logger.info(
+                "Shadow mode: detected %s (conf=%.2f) for track %d",
+                event_type,
+                confidence,
+                track_id,
+            )
             return class_id, confidence, None  # Don't trigger in shadow mode
 
         return class_id, confidence, event_type

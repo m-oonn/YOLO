@@ -9,11 +9,9 @@ import logging
 import os
 from pathlib import Path
 
+import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-import yaml
-
-from core.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +22,7 @@ CONFIG_PATH = PROJECT_ROOT / "configs" / "default.yaml"
 
 
 # ── Pydantic Models ───────────────────────────────────────────
+
 
 class RuleConfig(BaseModel):
     enabled: bool = True
@@ -59,15 +58,18 @@ class SettingsUpdateRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────
 
+
 def _read_config() -> dict:
     if not CONFIG_PATH.exists():
         return {}
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         logger.error("Failed to read config: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to read config: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read config: {e}"
+        ) from e
 
 
 def _write_config(data: dict) -> None:
@@ -77,10 +79,13 @@ def _write_config(data: dict) -> None:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
     except Exception as e:
         logger.error("Failed to write config: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to write config: {e}"
+        ) from e
 
 
 # ── Endpoints ─────────────────────────────────────────────────
+
 
 @router.get("/")
 def get_config():

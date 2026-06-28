@@ -51,7 +51,9 @@ def _load_config_from_env() -> AlarmConfig:
             "smtp_user": os.environ.get("ALARM_SMTP_USER", ""),
             "smtp_pass": os.environ.get("ALARM_SMTP_PASS", ""),
             "from_addr": os.environ.get("ALARM_FROM_ADDR", ""),
-            "to_addrs": os.environ.get("ALARM_TO_ADDRS", "").split(",") if os.environ.get("ALARM_TO_ADDRS") else [],
+            "to_addrs": os.environ.get("ALARM_TO_ADDRS", "").split(",")
+            if os.environ.get("ALARM_TO_ADDRS")
+            else [],
             "use_tls": os.environ.get("ALARM_SMTP_TLS", "true").lower() == "true",
         }
 

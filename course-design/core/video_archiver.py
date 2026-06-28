@@ -128,8 +128,7 @@ class VideoClipRecorder:
             self._post_frames = []
 
         clip_id = (
-            f"{event_type}_"
-            f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
+            f"{event_type}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
         )
         self._pending_clip_id = clip_id
         return clip_id
@@ -234,7 +233,7 @@ class VideoClipRecorder:
             self._db_conn.commit()
 
     def _finalize_clip(self) -> None:
-        clip_id = getattr(self, '_pending_clip_id', None)
+        clip_id = getattr(self, "_pending_clip_id", None)
         if not clip_id:
             clip_id = (
                 f"{self._current_event_type}_"
@@ -262,7 +261,11 @@ class VideoClipRecorder:
             )
 
         self._write_executor.submit(
-            self._write_clip, clip_id, event_type, tags, all_frames,
+            self._write_clip,
+            clip_id,
+            event_type,
+            tags,
+            all_frames,
         )
 
     def _write_clip(
@@ -285,11 +288,26 @@ class VideoClipRecorder:
                 return
             h, w = first.shape[:2]
 
-            fourcc = cv2.VideoWriter_fourcc(*"avc1")
-            writer = cv2.VideoWriter(file_path, fourcc, self._clip_fps, (w, h))
-            if not writer.isOpened():
-                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                writer = cv2.VideoWriter(file_path, fourcc, self._clip_fps, (w, h))
+            # Try codecs in order of stability: mp4v first (no openh264 dependency),
+            # then avc1 (H.264, needs openh264 which may crash on Windows with mismatched DLL),
+            # then XVID as last resort
+            writer = None
+            for codec in ["mp4v", "avc1", "XVID"]:
+                try:
+                    fourcc = cv2.VideoWriter_fourcc(*codec)
+                    writer = cv2.VideoWriter(file_path, fourcc, self._clip_fps, (w, h))
+                    if writer.isOpened():
+                        break
+                except Exception:
+                    logger.warning("VideoWriter codec %s failed, trying next", codec)
+                    writer = None
+                    continue
+
+            if writer is None or not writer.isOpened():
+                logger.error(
+                    "Failed to create VideoWriter with any codec for %s", clip_id
+                )
+                return
 
             for jpeg_bytes, _ts in frames:
                 img = cv2.imdecode(
@@ -310,8 +328,13 @@ class VideoClipRecorder:
                     "(clip_id, event_type, timestamp, duration_s, file_path, "
                     "file_size_bytes, tags) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
-                        clip_id, event_type, time.time(), duration_s, file_path,
-                        file_size, str(tags),
+                        clip_id,
+                        event_type,
+                        time.time(),
+                        duration_s,
+                        file_path,
+                        file_size,
+                        str(tags),
                     ),
                 )
                 conn.commit()
@@ -320,7 +343,9 @@ class VideoClipRecorder:
             self._total_bytes += file_size
             logger.info(
                 "Clip saved: %s (%.1fs, %dKB)",
-                clip_id, duration_s, file_size // 1024,
+                clip_id,
+                duration_s,
+                file_size // 1024,
             )
             self._prune_old_clips()
 
@@ -337,11 +362,10 @@ class VideoClipRecorder:
                 return
             excess = count - self._max_clips
             rows = conn.execute(
-                "SELECT clip_id, file_path FROM clips "
-                "ORDER BY timestamp ASC LIMIT ?",
+                "SELECT clip_id, file_path FROM clips ORDER BY timestamp ASC LIMIT ?",
                 (excess,),
             ).fetchall()
-            for clip_id, file_path in rows:
+            for _clip_id, file_path in rows:
                 if os.path.exists(file_path):
                     os.remove(file_path)
             conn.execute(
@@ -359,13 +383,17 @@ def _row_to_clip(row: tuple) -> ArchivedClip:
     import json
 
     (
-        clip_id, event_type, timestamp, duration_s,
-        file_path, file_size_bytes, event_count, tags_raw,
+        clip_id,
+        event_type,
+        timestamp,
+        duration_s,
+        file_path,
+        file_size_bytes,
+        event_count,
+        tags_raw,
     ) = row
     try:
-        tags = (
-            json.loads(tags_raw) if isinstance(tags_raw, str) else (tags_raw or [])
-        )
+        tags = json.loads(tags_raw) if isinstance(tags_raw, str) else (tags_raw or [])
     except (json.JSONDecodeError, TypeError):
         tags = []
     return ArchivedClip(

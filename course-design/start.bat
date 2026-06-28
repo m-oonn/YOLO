@@ -8,17 +8,22 @@ echo   YOLO Detection System - Windows Launcher
 echo ============================================================
 echo.
 
-REM --- Check Python installation ---
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python not found. Please install Python 3.10 or higher.
-    echo         Download from: https://www.python.org/downloads/
-    pause
-    exit /b 1
+REM --- Locate Python interpreter (prefer the CUDA-enabled yolovll conda env) ---
+set "PYTHON_EXE=E:\Miniconda3\envs\yolovll\python.exe"
+if not exist "%PYTHON_EXE%" (
+    REM Fall back to whatever python is on PATH
+    python --version >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Python not found. Please install Python 3.10 or higher.
+        echo         Download from: https://www.python.org/downloads/
+        pause
+        exit /b 1
+    )
+    set "PYTHON_EXE=python"
 )
 
-for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PY_VER=%%v
-echo [INFO] Using Python %PY_VER%
+for /f "tokens=2" %%v in ('"%PYTHON_EXE%" --version 2^>^&1') do set PY_VER=%%v
+echo [INFO] Using Python %PY_VER% (%PYTHON_EXE%)
 
 REM --- Quick camera diagnostic (non-blocking) ---
 echo [INFO] Checking camera availability...
@@ -26,7 +31,7 @@ powershell -NoProfile -Command "try { $cam = Get-CimInstance Win32_PnPEntity | W
 echo.
 
 REM --- Run the Python launcher with safe defaults ---
-python "%~dp0scripts\launcher.py" --skip-checks %*
+"%PYTHON_EXE%" "%~dp0scripts\launcher.py" --skip-checks %*
 
 if errorlevel 1 (
     echo.

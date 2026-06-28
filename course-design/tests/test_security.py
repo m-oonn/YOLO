@@ -10,13 +10,10 @@ and other security measures.
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from backend.security import (
-    ALLOWED_VIDEO_EXTENSIONS,
-    ALLOWED_VIDEO_MIME_TYPES,
     RateLimiter,
     is_safe_path,
     sanitize_config_value,
@@ -47,6 +44,9 @@ class TestIsSafePath:
         with tempfile.TemporaryDirectory() as tmpdir:
             assert not is_safe_path(tmpdir, "/etc/passwd")
 
+    @pytest.mark.skipif(
+        os.name == "nt", reason="Windows requires admin/dev mode to create symlinks"
+    )
     def test_symlink_within_base(self):
         """Symlink within base should be allowed (follows symlink)."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -87,7 +87,10 @@ class TestSanitizeFilename:
 
     def test_multiple_dangerous_chars_normalized(self):
         """Multiple consecutive dangerous chars should be normalized."""
-        assert sanitize_filename("file///multiple///slashes.txt") == "file_multiple_slashes.txt"
+        assert (
+            sanitize_filename("file///multiple///slashes.txt")
+            == "file_multiple_slashes.txt"
+        )
 
     def test_empty_after_sanitization(self):
         """Empty result should get fallback name."""

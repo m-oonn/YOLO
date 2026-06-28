@@ -11,6 +11,7 @@ thread from blocking indefinitely.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import platform
 import threading
@@ -100,10 +101,8 @@ def open_camera_with_timeout(
     cap = result_container[0]
     if cap is None or not cap.isOpened():
         if cap is not None:
-            try:
+            with contextlib.suppress(Exception):
                 cap.release()
-            except Exception:
-                pass
         return (
             None,
             f"cv2.VideoCapture returned but isOpened()=False for source={source} "
@@ -156,10 +155,8 @@ def try_open_camera_windows(
             last_error = err
             logger.warning("Camera %d backend %s failed: %s", source, name, err)
         if cap is not None:
-            try:
+            with contextlib.suppress(Exception):
                 cap.release()
-            except Exception:
-                pass
         # Small delay between backend attempts (not after last)
         if idx < len(backends) - 1:
             time.sleep(BACKEND_RETRY_DELAY)
@@ -221,7 +218,6 @@ def quick_camera_check(
     Returns:
         Tuple of (available: bool, message: str).
     """
-    import cv2
 
     system = platform.system()
     cap = None
@@ -250,7 +246,5 @@ def quick_camera_check(
         return False, f"Camera check failed: {exc}"
     finally:
         if cap is not None:
-            try:
+            with contextlib.suppress(Exception):
                 cap.release()
-            except Exception:
-                pass

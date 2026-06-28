@@ -15,6 +15,7 @@ Usage:
     python scripts/merge_datasets.py
     python scripts/merge_datasets.py --weapon-limit 8000
 """
+
 from __future__ import annotations
 
 import random
@@ -36,54 +37,62 @@ def gather_sources() -> None:
     # fire: data/train, data/valid
     fire_root = RAW / "fire" / "data"
     if fire_root.exists():
-        SOURCES.append({
-            "name": "fire",
-            "train_img": fire_root / "train" / "images",
-            "train_lbl": fire_root / "train" / "labels",
-            "val_img": fire_root / "valid" / "images",
-            "val_lbl": fire_root / "valid" / "labels",
-            "remap": {0: 1, 1: 2},  # fire->1, smoke->2
-        })
+        SOURCES.append(
+            {
+                "name": "fire",
+                "train_img": fire_root / "train" / "images",
+                "train_lbl": fire_root / "train" / "labels",
+                "val_img": fire_root / "valid" / "images",
+                "val_lbl": fire_root / "valid" / "labels",
+                "remap": {0: 1, 1: 2},  # fire->1, smoke->2
+            }
+        )
 
     # weapon: dataset_merged/train, val, test
     wp_root = RAW / "weapon" / "dataset_merged"
     if wp_root.exists():
-        SOURCES.append({
-            "name": "weapon",
-            "train_img": wp_root / "train" / "images",
-            "train_lbl": wp_root / "train" / "labels",
-            "val_img": wp_root / "val" / "images",
-            "val_lbl": wp_root / "val" / "labels",
-            "test_img": wp_root / "test" / "images",
-            "test_lbl": wp_root / "test" / "labels",
-            "remap": {0: 3},  # Weapon->3
-        })
+        SOURCES.append(
+            {
+                "name": "weapon",
+                "train_img": wp_root / "train" / "images",
+                "train_lbl": wp_root / "train" / "labels",
+                "val_img": wp_root / "val" / "images",
+                "val_lbl": wp_root / "val" / "labels",
+                "test_img": wp_root / "test" / "images",
+                "test_lbl": wp_root / "test" / "labels",
+                "remap": {0: 3},  # Weapon->3
+            }
+        )
 
     # fall: images/train, images/val and labels/train, labels/val
     fall_root = RAW / "fall" / "fall_dataset"
     if fall_root.exists():
-        SOURCES.append({
-            "name": "fall",
-            "train_img": fall_root / "images" / "train",
-            "train_lbl": fall_root / "labels" / "train",
-            "val_img": fall_root / "images" / "val",
-            "val_lbl": fall_root / "labels" / "val",
-            "remap": {0: 4},  # fall->4 (fallen)
-        })
+        SOURCES.append(
+            {
+                "name": "fall",
+                "train_img": fall_root / "images" / "train",
+                "train_lbl": fall_root / "labels" / "train",
+                "val_img": fall_root / "images" / "val",
+                "val_lbl": fall_root / "labels" / "val",
+                "remap": {0: 4},  # fall->4 (fallen)
+            }
+        )
 
     # fight: violance-nonviolance.v7i.yolov8/train, valid, test
     fight_root = RAW / "fight" / "violance-nonviolance.v7i.yolov8"
     if fight_root.exists():
-        SOURCES.append({
-            "name": "fight",
-            "train_img": fight_root / "train" / "images",
-            "train_lbl": fight_root / "train" / "labels",
-            "val_img": fight_root / "valid" / "images",
-            "val_lbl": fight_root / "valid" / "labels",
-            "test_img": fight_root / "test" / "images",
-            "test_lbl": fight_root / "test" / "labels",
-            "remap": {0: 0, 1: 5},  # NonViolence->person(0), Violence->5
-        })
+        SOURCES.append(
+            {
+                "name": "fight",
+                "train_img": fight_root / "train" / "images",
+                "train_lbl": fight_root / "train" / "labels",
+                "val_img": fight_root / "valid" / "images",
+                "val_lbl": fight_root / "valid" / "labels",
+                "test_img": fight_root / "test" / "images",
+                "test_lbl": fight_root / "test" / "labels",
+                "remap": {0: 0, 1: 5},  # NonViolence->person(0), Violence->5
+            }
+        )
 
 
 def copy_and_remap(
@@ -150,9 +159,14 @@ def copy_and_remap(
 
 def main() -> int:
     import argparse
+
     parser = argparse.ArgumentParser(description="Merge campus safety datasets")
-    parser.add_argument("--weapon-limit", type=int, default=8000,
-                        help="Max weapon training images (downsample to balance)")
+    parser.add_argument(
+        "--weapon-limit",
+        type=int,
+        default=8000,
+        help="Max weapon training images (downsample to balance)",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     args = parser.parse_args()
     random.seed(args.seed)
@@ -180,8 +194,13 @@ def main() -> int:
         # Train
         if "train_img" in src:
             n = copy_and_remap(
-                src["train_img"], src["train_lbl"],
-                train_img, train_lbl, remap, name, limit=limit,
+                src["train_img"],
+                src["train_lbl"],
+                train_img,
+                train_lbl,
+                remap,
+                name,
+                limit=limit,
             )
             print(f"  train: {n} images")
             total_train += n
@@ -189,8 +208,12 @@ def main() -> int:
         # Val
         if "val_img" in src:
             n = copy_and_remap(
-                src["val_img"], src["val_lbl"],
-                val_img, val_lbl, remap, name,
+                src["val_img"],
+                src["val_lbl"],
+                val_img,
+                val_lbl,
+                remap,
+                name,
             )
             print(f"  val:   {n} images")
             total_val += n
@@ -198,8 +221,12 @@ def main() -> int:
         # Test → add to val (no separate test set)
         if "test_img" in src:
             n = copy_and_remap(
-                src["test_img"], src["test_lbl"],
-                val_img, val_lbl, remap, name,
+                src["test_img"],
+                src["test_lbl"],
+                val_img,
+                val_lbl,
+                remap,
+                name,
             )
             print(f"  test→val: {n} images")
             total_val += n
@@ -208,8 +235,11 @@ def main() -> int:
         if "flat_img" in src:
             # Split 80/20 for train/val
             imgs = sorted(
-                [f for f in src["flat_img"].iterdir()
-                 if f.suffix.lower() in (".jpg", ".png", ".jpeg")]
+                [
+                    f
+                    for f in src["flat_img"].iterdir()
+                    if f.suffix.lower() in (".jpg", ".png", ".jpeg")
+                ]
             )
             random.shuffle(imgs)
             split = int(len(imgs) * 0.8)
@@ -288,15 +318,15 @@ def main() -> int:
     )
 
     # Summary
-    print(f"\n{'='*60}")
-    print(f"MERGE COMPLETE")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("MERGE COMPLETE")
+    print(f"{'=' * 60}")
     print(f"Train: {total_train} images")
     print(f"Val:   {total_val} images")
     print(f"Total: {total_train + total_val} images")
-    print(f"Classes: person, fire, smoke, weapon, fallen, violence")
+    print("Classes: person, fire, smoke, weapon, fallen, violence")
     print(f"Output: {OUT}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     return 0
 
 

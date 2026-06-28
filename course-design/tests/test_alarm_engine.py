@@ -5,20 +5,18 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 import time
 
 import pytest
 
 from core.alarm_engine import (
+    EVENT_LEVEL_LABELS,
+    EVENT_LEVEL_MAP,
     AlarmConfig,
     AlarmEngine,
     AlarmLevel,
     AlarmStatus,
     AlarmStore,
-    EVENT_LEVEL_MAP,
-    EVENT_LEVEL_LABELS,
 )
 from core.rules import Event
 

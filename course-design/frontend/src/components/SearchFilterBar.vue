@@ -66,10 +66,6 @@ const initValues = () => {
 
 initValues()
 
-const onFilterChange = () => {
-  // auto-search on change for selects, debounced for inputs
-}
-
 const onSearch = () => {
   const params = {}
   Object.entries(filterValues).forEach(([key, val]) => {

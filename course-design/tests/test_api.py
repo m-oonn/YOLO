@@ -92,8 +92,9 @@ def test_detection_status_no_pipeline(client):
 
 
 def test_start_detection_already_active(client):
-    from backend.detection_manager import detection_manager
     from unittest.mock import MagicMock
+
+    from backend.detection_manager import detection_manager
 
     fake_thread = MagicMock()
     fake_thread.is_alive.return_value = True

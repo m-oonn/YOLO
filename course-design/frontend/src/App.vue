@@ -19,15 +19,45 @@
           </el-button>
           <h1 class="app-title">
             <span class="title-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" stroke-width="1.8" fill="none"/>
-                <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                <circle cx="12" cy="12" r="1.2" fill="currentColor"/>
-                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="1.2" opacity="0.5"/>
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  x="2"
+                  y="5"
+                  width="20"
+                  height="14"
+                  rx="3"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  fill="none"
+                />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="3"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  fill="none"
+                />
+                <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+                <path
+                  d="M12 2v3M12 19v3M2 12h3M19 12h3"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                  opacity="0.5"
+                />
               </svg>
             </span>
             <div class="title-text">
-              <span class="title-main">CAMPUS<span class="title-highlight">SAFE</span></span>
+              <span class="title-main">
+                CAMPUS
+                <span class="title-highlight">SAFE</span>
+              </span>
               <span class="title-sub">智能安防监控系统</span>
             </div>
           </h1>
@@ -65,8 +95,21 @@
           >
             <div class="sidebar-brand">
               <div class="brand-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    fill="none"
+                  />
                 </svg>
               </div>
               <div class="brand-text">
@@ -78,32 +121,99 @@
             <el-menu :default-active="route.path" router class="nav-menu" @select="onMenuSelect">
               <el-menu-item index="/">
                 <span class="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
                 </span>
                 <span class="nav-label">数据仪表盘</span>
               </el-menu-item>
               <el-menu-item index="/monitor">
                 <span class="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M23 7l-7 5 7 5V7z" />
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                  </svg>
                 </span>
                 <span class="nav-label">实时监控</span>
               </el-menu-item>
               <el-menu-item index="/events">
                 <span class="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
                 </span>
                 <span class="nav-label">事件记录</span>
               </el-menu-item>
               <el-menu-item index="/alarms">
                 <span class="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
                 </span>
                 <span class="nav-label">报警管理</span>
                 <span v-if="activeAlarmCount > 0" class="nav-badge">{{ activeAlarmCount }}</span>
               </el-menu-item>
               <el-menu-item index="/config">
                 <span class="nav-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                    />
+                  </svg>
                 </span>
                 <span class="nav-label">系统配置</span>
               </el-menu-item>
@@ -365,7 +475,12 @@ html {
 }
 
 body {
-  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    'Noto Sans SC',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--text-primary);
@@ -547,8 +662,15 @@ a {
 }
 
 @keyframes conn-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0; transform: scale(1.5); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
 }
 
 .conn-label {
@@ -591,7 +713,13 @@ a {
   right: 0;
   bottom: 0;
   width: 1px;
-  background: linear-gradient(180deg, transparent, var(--color-primary) 30%, var(--color-primary) 70%, transparent);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--color-primary) 30%,
+    var(--color-primary) 70%,
+    transparent
+  );
   opacity: 0.15;
 }
 
@@ -722,8 +850,13 @@ a {
 }
 
 @keyframes badge-glow {
-  0%, 100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.4); }
-  50% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.7); }
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
+  }
 }
 
 .sidebar-footer {
@@ -786,15 +919,24 @@ a {
     linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px),
     radial-gradient(circle at 20% 50%, rgba(245, 158, 11, 0.02) 0%, transparent 50%),
     radial-gradient(circle at 80% 80%, rgba(0, 212, 255, 0.015) 0%, transparent 40%);
-  background-size: 60px 60px, 60px 60px, 100% 100%, 100% 100%;
+  background-size:
+    60px 60px,
+    60px 60px,
+    100% 100%,
+    100% 100%;
   pointer-events: none;
   z-index: 0;
   animation: grid-pulse 4s ease-in-out infinite;
 }
 
 @keyframes grid-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .connection-alert {
@@ -853,7 +995,7 @@ a {
   background: var(--bg-card) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
   transition: all var(--transition-fast);
@@ -868,7 +1010,13 @@ a {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.3), rgba(0, 212, 255, 0.2), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(245, 158, 11, 0.3),
+    rgba(0, 212, 255, 0.2),
+    transparent
+  );
   opacity: 0.5;
   transition: opacity var(--transition-fast);
 }
@@ -887,7 +1035,7 @@ a {
 }
 
 .el-card:hover {
-  box-shadow: 
+  box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.5),
     0 0 30px rgba(0, 212, 255, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
@@ -918,7 +1066,7 @@ a {
 }
 
 .el-button--primary:hover {
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(245, 158, 11, 0.3),
     0 0 20px rgba(245, 158, 11, 0.2);
 }
@@ -931,7 +1079,7 @@ a {
 }
 
 .el-button--success:hover {
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(16, 185, 129, 0.3),
     0 0 20px rgba(16, 185, 129, 0.15);
 }
@@ -944,7 +1092,7 @@ a {
 }
 
 .el-button--danger:hover {
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(239, 68, 68, 0.3),
     0 0 20px rgba(239, 68, 68, 0.15);
 }
@@ -1141,12 +1289,21 @@ a {
 
 /* Loading skeleton animation */
 @keyframes shimmer {
-  0% { background-position: -200px 0; }
-  100% { background-position: calc(200px + 100%) 0; }
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-overlay) 50%, var(--bg-elevated) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-overlay) 50%,
+    var(--bg-elevated) 75%
+  );
   background-size: 200px 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-sm);

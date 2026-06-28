@@ -10,6 +10,7 @@ codes and response times. Useful for smoke-testing a running backend.
 Usage:
     python scripts/check_api.py
 """
+
 import requests
 
 BASE_URL = "http://127.0.0.1:8000"

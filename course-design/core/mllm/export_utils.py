@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,11 @@ MODEL_REGISTRY = {
         "hf_id": "Qwen/Qwen2-VL-2B-Instruct",
         "type": "vlm",
         "estimated_size_gb": 4.0,
+    },
+    "qwen2-vl-7b": {
+        "hf_id": "Qwen/Qwen2-VL-7B-Instruct",
+        "type": "vlm",
+        "estimated_size_gb": 16.0,
     },
     "smolvlm-500m": {
         "hf_id": "HuggingFaceTB/SmolVLM-500M-Instruct",
@@ -33,7 +37,9 @@ MODEL_REGISTRY = {
 
 def download_mllm_model(model_type: str, output_dir: str = "models/mllm") -> str:
     if model_type not in MODEL_REGISTRY:
-        raise ValueError(f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}")
+        raise ValueError(
+            f"Unknown model type: {model_type}. Available: {list(MODEL_REGISTRY.keys())}"
+        )
 
     info = MODEL_REGISTRY[model_type]
     hf_id = info["hf_id"]
@@ -93,7 +99,9 @@ def export_to_onnx(
         return output_path
     except Exception as e:
         logger.error(f"ONNX export failed: {e}")
-        logger.info("Note: VLM ONNX export is complex. Consider using PyTorch backend instead.")
+        logger.info(
+            "Note: VLM ONNX export is complex. Consider using PyTorch backend instead."
+        )
         raise
 
 
@@ -132,9 +140,7 @@ def build_tensorrt_engine(
     logger.info(f"Building TensorRT engine: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=3600, check=True
-        )
+        subprocess.run(cmd, capture_output=True, text=True, timeout=3600, check=True)
         logger.info(f"TensorRT engine built: {engine_path}")
         return engine_path
     except subprocess.CalledProcessError as e:

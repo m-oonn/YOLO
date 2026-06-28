@@ -49,7 +49,15 @@ class TestConstants:
     def test_event_types_complete(self):
         from core.constants import EVENT_TYPES
 
-        expected = {"running", "fall", "crowd", "intrusion", "fight"}
+        expected = {
+            "running",
+            "fall",
+            "crowd",
+            "intrusion",
+            "fight",
+            "vehicle_intrusion",
+            "suspicious",
+        }
         assert set(EVENT_TYPES) == expected
 
     def test_person_class_id(self):
@@ -72,7 +80,7 @@ class TestConfig:
 
         cfg = load_config()
         assert ".pt" in cfg.model_path or ".onnx" in cfg.model_path
-        assert cfg.conf == 0.35
+        assert cfg.conf == 0.25
         assert cfg.camera_fps == 30
         assert cfg.rules.running.enabled is True
 
@@ -80,10 +88,9 @@ class TestConfig:
         from core.config import load_config
 
         data = {
-            "model": {"path": "custom.pt", "conf": 0.5, "imgsz": 320},
+            "model": {"path": "custom.pt", "conf": 0.5, "imgsz": 320, "device": "cpu"},
             "camera": {"fps": 15},
             "output": {"directory": "/tmp/out", "save_snapshots": False, "view": False},
-            "device": "cpu",
             "rules": {
                 "running": {"enabled": True, "speed_px_s": 500},
                 "fall": {"enabled": True},
@@ -113,7 +120,7 @@ class TestConfig:
         f.write_text("---\n")
         cfg = load_config(str(f))
         assert "yolov" in cfg.model_path
-        assert cfg.conf == 0.35
+        assert cfg.conf == 0.25
 
     def test_load_config_with_intrusion_zones(self, tmp_path):
         from core.config import load_config
@@ -152,8 +159,8 @@ class TestConfig:
         f.write_text(yaml.dump({"model": {}}))
         cfg = load_config(str(f))
         assert "yolov" in cfg.model_path
-        assert cfg.conf == 0.35
-        assert cfg.iou == 0.5
+        assert cfg.conf == 0.25
+        assert cfg.iou == 0.45
 
 
 # ── Geometry ──────────────────────────────────────────────────────────
@@ -188,14 +195,14 @@ class TestGeometry:
 
 class TestDetectionHelpers:
     def test_allowed_video_extensions(self):
-        from backend.api.detection import ALLOWED_VIDEO_EXTENSIONS
+        from backend.security import ALLOWED_VIDEO_EXTENSIONS
 
         assert ".mp4" in ALLOWED_VIDEO_EXTENSIONS
         assert ".avi" in ALLOWED_VIDEO_EXTENSIONS
-        assert len(ALLOWED_VIDEO_EXTENSIONS) == 6
+        assert len(ALLOWED_VIDEO_EXTENSIONS) == 7
 
     def test_allowed_video_mime_types(self):
-        from backend.api.detection import ALLOWED_VIDEO_MIME_TYPES
+        from backend.security import ALLOWED_VIDEO_MIME_TYPES
 
         assert "video/mp4" in ALLOWED_VIDEO_MIME_TYPES
 

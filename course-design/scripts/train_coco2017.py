@@ -30,6 +30,7 @@ Requirements:
   pip install ultralytics tensorboard matplotlib tqdm
 """
 import argparse
+import contextlib
 import csv
 import ctypes
 import json
@@ -71,7 +72,7 @@ class InsomniaBlocker:
     def __init__(self) -> None:
         self._active = False
 
-    def __enter__(self) -> "InsomniaBlocker":
+    def __enter__(self) -> InsomniaBlocker:
         if sys.platform == "win32":
             ctypes.windll.kernel32.SetThreadExecutionState(
                 _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
@@ -122,12 +123,18 @@ def detect_checkpoint(run_dir: Path, target_epochs: int) -> dict:
     """
     last_pt = run_dir / "weights" / "last.pt"
     if not last_pt.exists():
-        return {"resume": False, "checkpoint_path": "", "start_epoch": -1, "completed_epochs": 0}
+        return {
+            "resume": False,
+            "checkpoint_path": "",
+            "start_epoch": -1,
+            "completed_epochs": 0,
+        }
 
     # Try to extract epoch from checkpoint
     start_epoch = -1
     try:
         import torch
+
         ckpt = torch.load(str(last_pt), map_location="cpu", weights_only=False)
         start_epoch = ckpt.get("epoch", -1)  # 0-indexed, the last COMPLETED epoch
     except Exception:
@@ -147,7 +154,9 @@ def detect_checkpoint(run_dir: Path, target_epochs: int) -> dict:
 
     completed_epochs = start_epoch + 1
     checkpoint_path = str(last_pt)
-    print(f"[DETECT] Found checkpoint: epoch {completed_epochs}/{target_epochs} completed")
+    print(
+        f"[DETECT] Found checkpoint: epoch {completed_epochs}/{target_epochs} completed"
+    )
     return {
         "resume": True,
         "checkpoint_path": checkpoint_path,
@@ -163,6 +172,7 @@ def check_env() -> bool:
     """Verify environment: ultralytics installed, GPU available."""
     try:
         import ultralytics
+
         print(f"[OK] ultralytics {ultralytics.__version__}")
     except ImportError:
         print("[ERROR] ultralytics not installed. Run: pip install ultralytics")
@@ -170,9 +180,10 @@ def check_env() -> bool:
 
     try:
         import torch
+
         if torch.cuda.is_available():
             props = torch.cuda.get_device_properties(0)
-            total_mb = props.total_memory / (1024 ** 2)
+            total_mb = props.total_memory / (1024**2)
             print(f"[OK] GPU: {props.name} ({total_mb:.0f} MB)")
         else:
             print("[WARN] No CUDA GPU - training will be slow on CPU")
@@ -247,7 +258,9 @@ class TrainingProgressCallback:
         run_dir: Path | None = None,
     ):
         self.total_epochs = total_epochs
-        self.completed_epochs = completed_epochs  # epochs already finished (from prior runs)
+        self.completed_epochs = (
+            completed_epochs  # epochs already finished (from prior runs)
+        )
         self.max_time_seconds = max_time_seconds
         self.run_dir = run_dir
 
@@ -286,8 +299,12 @@ class TrainingProgressCallback:
         )
 
         if self.completed_epochs > 0:
-            self._epoch_pbar.set_postfix({"status": f"resumed @ epoch {self.completed_epochs}"})
-            _tqdm.write(f"  >>> Auto-resumed from epoch {self.completed_epochs}/{self.total_epochs} <<<")
+            self._epoch_pbar.set_postfix(
+                {"status": f"resumed @ epoch {self.completed_epochs}"}
+            )
+            _tqdm.write(
+                f"  >>> Auto-resumed from epoch {self.completed_epochs}/{self.total_epochs} <<<"
+            )
 
     def on_train_epoch_start(self, trainer: object) -> None:
         """Create batch-level progress bar for the upcoming epoch."""
@@ -301,10 +318,8 @@ class TrainingProgressCallback:
                     f"\n  ⏰ Time limit ({self.max_time_seconds / 3600:.1f}h) reached. "
                     f"Stopping after epoch {self.current_epoch}..."
                 )
-                try:
+                with contextlib.suppress(Exception):
                     trainer.stop_training = True
-                except Exception:
-                    pass
                 self._time_limit_reached = True
                 return
 
@@ -347,10 +362,11 @@ class TrainingProgressCallback:
         if self._batch_pbar.n % 200 == 0 and self.run_dir:
             try:
                 import torch
+
                 if torch.cuda.is_available():
-                    allocated = torch.cuda.memory_allocated(0) / (1024 ** 3)
-                    reserved = torch.cuda.memory_reserved(0) / (1024 ** 3)
-                    total = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+                    allocated = torch.cuda.memory_allocated(0) / (1024**3)
+                    reserved = torch.cuda.memory_reserved(0) / (1024**3)
+                    total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                     gpu_log = self.run_dir / "gpu_memory.log"
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     with open(gpu_log, "a", encoding="utf-8") as gf:
@@ -394,12 +410,14 @@ class TrainingProgressCallback:
             self._epoch_pbar.set_postfix(postfix)
             self._epoch_pbar.update(1)
 
-        self._history.append({
-            "epoch": epoch,
-            "mAP50": mAP50,
-            "mAP50-95": mAP95,
-            "box_loss": box_loss,
-        })
+        self._history.append(
+            {
+                "epoch": epoch,
+                "mAP50": mAP50,
+                "mAP50-95": mAP95,
+                "box_loss": box_loss,
+            }
+        )
 
         elapsed = time.time() - self._start_time
         remaining = self.total_epochs - epoch
@@ -418,6 +436,7 @@ class TrainingProgressCallback:
         )
 
         from tqdm import tqdm as _tqdm
+
         _tqdm.write(summary)
 
         # Persist state after each epoch for crash recovery
@@ -432,10 +451,17 @@ class TrainingProgressCallback:
             }
             try:
                 import torch
+
                 if torch.cuda.is_available():
-                    state["gpu_alloc_gb"] = round(torch.cuda.memory_allocated(0) / 1024**3, 2)
-                    state["gpu_reserved_gb"] = round(torch.cuda.memory_reserved(0) / 1024**3, 2)
-                    state["gpu_max_alloc_gb"] = round(torch.cuda.max_memory_allocated(0) / 1024**3, 2)
+                    state["gpu_alloc_gb"] = round(
+                        torch.cuda.memory_allocated(0) / 1024**3, 2
+                    )
+                    state["gpu_reserved_gb"] = round(
+                        torch.cuda.memory_reserved(0) / 1024**3, 2
+                    )
+                    state["gpu_max_alloc_gb"] = round(
+                        torch.cuda.max_memory_allocated(0) / 1024**3, 2
+                    )
                     torch.cuda.reset_peak_memory_stats(0)
             except Exception:
                 pass
@@ -447,10 +473,8 @@ class TrainingProgressCallback:
                 f"\n  ⏰ Time limit ({self.max_time_seconds / 3600:.1f}h) reached. "
                 f"Stopping gracefully..."
             )
-            try:
+            with contextlib.suppress(Exception):
                 trainer.stop_training = True
-            except Exception:
-                pass
             self._time_limit_reached = True
 
     def on_train_end(self, trainer: object) -> None:
@@ -491,17 +515,25 @@ class TrainingProgressCallback:
 
         print()
         print("=" * 62)
-        print("  TRAINING COMPLETE"
-              + (" (time limit reached)" if self._time_limit_reached else ""))
+        print(
+            "  TRAINING COMPLETE"
+            + (" (time limit reached)" if self._time_limit_reached else "")
+        )
         print("=" * 62)
         print(f"  Total epochs:       {self.total_epochs}")
-        print(f"  Completed:          {len(h)} (started from epoch {self.completed_epochs + 1})")
-        print(f"  Total time:         {total_time / 60:.1f} min "
-              f"({total_time / 3600:.2f} h)")
+        print(
+            f"  Completed:          {len(h)} (started from epoch {self.completed_epochs + 1})"
+        )
+        print(
+            f"  Total time:         {total_time / 60:.1f} min "
+            f"({total_time / 3600:.2f} h)"
+        )
         if len(h) > 0:
             print(f"  Avg per epoch:      {total_time / len(h):.1f}s")
-        print(f"  Best mAP50:         {self._best_map50:.4f}  "
-              f"(epoch {h[best_idx]['epoch']})")
+        print(
+            f"  Best mAP50:         {self._best_map50:.4f}  "
+            f"(epoch {h[best_idx]['epoch']})"
+        )
         print(f"  Best mAP50-95:      {self._best_map95:.4f}")
         if h:
             print(f"  Final mAP50:        {h[-1]['mAP50']:.4f}")
@@ -512,7 +544,7 @@ class TrainingProgressCallback:
 
     # -- Context manager (optional) -----------------------------------------
 
-    def __enter__(self) -> "TrainingProgressCallback":
+    def __enter__(self) -> TrainingProgressCallback:
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -525,14 +557,24 @@ class TrainingProgressCallback:
 def start_tensorboard(logdir: str) -> None:
     """Launch TensorBoard in a background subprocess."""
     import subprocess
+
     logdir = Path(logdir).resolve()
     logdir.mkdir(parents=True, exist_ok=True)
-    print(f"[INFO] Starting TensorBoard -> http://localhost:6006")
+    print("[INFO] Starting TensorBoard -> http://localhost:6006")
     print(f"       Logdir: {logdir}")
     subprocess.Popen(
-        [sys.executable, "-m", "tensorboard.main", "--logdir", str(logdir),
-         "--port", "6006", "--bind_all"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [
+            sys.executable,
+            "-m",
+            "tensorboard.main",
+            "--logdir",
+            str(logdir),
+            "--port",
+            "6006",
+            "--bind_all",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
 
 
@@ -548,6 +590,7 @@ def generate_training_plots(run_dir: Path) -> None:
 
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
@@ -590,8 +633,11 @@ def generate_training_plots(run_dir: Path) -> None:
         vals = col(k)
         if vals and not all(math.isnan(v) for v in vals):
             ax.plot(epochs, vals, color=color, label=label, linewidth=1.2)
-    ax.set_title("Training Loss"); ax.set_xlabel("Epoch"); ax.set_ylabel("Loss")
-    ax.legend(); ax.grid(True, alpha=0.3)
+    ax.set_title("Training Loss")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
     # --- mAP ---
     ax = axes[0][1]
@@ -602,8 +648,11 @@ def generate_training_plots(run_dir: Path) -> None:
         vals = col(k)
         if vals and not all(math.isnan(v) for v in vals):
             ax.plot(epochs, vals, color=color, label=label, linewidth=1.5)
-    ax.set_title("Validation mAP"); ax.set_xlabel("Epoch"); ax.set_ylabel("mAP")
-    ax.legend(); ax.grid(True, alpha=0.3)
+    ax.set_title("Validation mAP")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("mAP")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
     ax.set_ylim(bottom=0)
 
     # --- Precision / Recall ---
@@ -615,8 +664,11 @@ def generate_training_plots(run_dir: Path) -> None:
         vals = col(k)
         if vals and not all(math.isnan(v) for v in vals):
             ax.plot(epochs, vals, color=color, label=label, linewidth=1.2)
-    ax.set_title("Precision / Recall"); ax.set_xlabel("Epoch")
-    ax.legend(); ax.grid(True, alpha=0.3); ax.set_ylim(bottom=0)
+    ax.set_title("Precision / Recall")
+    ax.set_xlabel("Epoch")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)
 
     # --- LR schedule ---
     ax = axes[1][1]
@@ -624,8 +676,10 @@ def generate_training_plots(run_dir: Path) -> None:
         vals = col(k)
         if vals and not all(math.isnan(v) for v in vals):
             ax.plot(epochs, vals, label=k, linewidth=1.0, alpha=0.7)
-    ax.set_title("Learning Rate Schedule"); ax.set_xlabel("Epoch")
-    ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+    ax.set_title("Learning Rate Schedule")
+    ax.set_xlabel("Epoch")
+    ax.legend(fontsize=7)
+    ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     out_path = run_dir / "training_results.png"
@@ -647,17 +701,25 @@ def dump_crash_info(run_dir: Path, exc: Exception) -> str:
 
     try:
         import torch
+
         if torch.cuda.is_available():
-            lines.append(f"\n--- GPU State ---")
-            lines.append(f"allocated:  {torch.cuda.memory_allocated(0) / 1024**3:.2f} GB")
-            lines.append(f"reserved:   {torch.cuda.memory_reserved(0) / 1024**3:.2f} GB")
-            lines.append(f"max_alloc:  {torch.cuda.max_memory_allocated(0) / 1024**3:.2f} GB")
+            lines.append("\n--- GPU State ---")
+            lines.append(
+                f"allocated:  {torch.cuda.memory_allocated(0) / 1024**3:.2f} GB"
+            )
+            lines.append(
+                f"reserved:   {torch.cuda.memory_reserved(0) / 1024**3:.2f} GB"
+            )
+            lines.append(
+                f"max_alloc:  {torch.cuda.max_memory_allocated(0) / 1024**3:.2f} GB"
+            )
             lines.append(f"device:     {torch.cuda.get_device_name(0)}")
     except Exception:
         pass
 
     try:
         import shutil
+
         usage = shutil.disk_usage(str(run_dir))
         free_gb = usage.free / 1024**3
         lines.append(f"disk free:  {free_gb:.1f} GB")
@@ -673,8 +735,8 @@ def dump_crash_info(run_dir: Path, exc: Exception) -> str:
 # ---------------------------------------------------------------------------
 def train(args: argparse.Namespace) -> object:
     """Run training with auto-resume and progress visualization."""
-    from ultralytics import YOLO
     import torch
+    from ultralytics import YOLO
 
     # --- dataset ---
     data_yaml = resolve_dataset(args)
@@ -684,7 +746,7 @@ def train(args: argparse.Namespace) -> object:
     # --- batch size ---
     gpu_mb = 0.0
     if torch.cuda.is_available():
-        gpu_mb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 2)
+        gpu_mb = torch.cuda.get_device_properties(0).total_memory / (1024**2)
 
     batch = args.batch if args.batch > 0 else auto_batch(args.model, gpu_mb)
     epochs = args.epochs
@@ -702,9 +764,11 @@ def train(args: argparse.Namespace) -> object:
         if ckpt_info["resume"]:
             # Check if training is already complete
             if ckpt_info["completed_epochs"] >= epochs:
-                print(f"[DONE] Training already completed "
-                      f"({ckpt_info['completed_epochs']}/{epochs} epochs).")
-                print(f"  Use --fresh to restart, or --epochs to train more.")
+                print(
+                    f"[DONE] Training already completed "
+                    f"({ckpt_info['completed_epochs']}/{epochs} epochs)."
+                )
+                print("  Use --fresh to restart, or --epochs to train more.")
                 # Still show plots for existing results
                 generate_training_plots(run_dir)
                 return None
@@ -728,8 +792,10 @@ def train(args: argparse.Namespace) -> object:
     # --- load previous training state for display ---
     prev_state = load_training_state(run_dir)
     if prev_state and not args.fresh:
-        print(f"[STATE] Previous run: {prev_state.get('completed_epochs', '?')} epochs, "
-              f"best mAP50={prev_state.get('best_map50', 0):.4f}")
+        print(
+            f"[STATE] Previous run: {prev_state.get('completed_epochs', '?')} epochs, "
+            f"best mAP50={prev_state.get('best_map50', 0):.4f}"
+        )
 
     # --- TensorBoard (optional) ---
     if args.tensorboard:
@@ -753,26 +819,26 @@ def train(args: argparse.Namespace) -> object:
     max_time_s = args.max_time * 3600.0 if args.max_time > 0 else 0.0
 
     # --- train kwargs ---
-    train_kwargs = dict(
-        data=data_yaml,
-        epochs=epochs,
-        imgsz=args.imgsz,
-        batch=batch,
-        device=args.device,
-        project=DEFAULT_PROJECT,
-        name=name,
-        exist_ok=True,
-        resume=resume,
-        pretrained=not resume,
-        optimizer="auto",
-        save=True,
-        save_period=1,
-        patience=args.patience,
-        workers=args.workers,
-        cache=args.cache,
-        verbose=False,
-        plots=False,
-    )
+    train_kwargs = {
+        "data": data_yaml,
+        "epochs": epochs,
+        "imgsz": args.imgsz,
+        "batch": batch,
+        "device": args.device,
+        "project": DEFAULT_PROJECT,
+        "name": name,
+        "exist_ok": True,
+        "resume": resume,
+        "pretrained": not resume,
+        "optimizer": "auto",
+        "save": True,
+        "save_period": 1,
+        "patience": args.patience,
+        "workers": args.workers,
+        "cache": args.cache,
+        "verbose": False,
+        "plots": False,
+    }
 
     if gpu_mb > 0 and not args.amp:
         train_kwargs["amp"] = False
@@ -829,7 +895,7 @@ def train(args: argparse.Namespace) -> object:
         print("TensorBoard:  tensorboard --logdir " + str(run_dir))
 
     if interrupted:
-        print(f"\nTo resume, simply run the same command again (auto-resume).")
+        print("\nTo resume, simply run the same command again (auto-resume).")
 
     return results
 
@@ -862,41 +928,74 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Train YOLO on COCO 2017 with auto-resume and progress visualization"
     )
-    parser.add_argument("--model", default="yolo12n",
-                        help="Model (yolo12n, yolo12s, yolo12m, yolo12l, yolo12x)")
-    parser.add_argument("--epochs", type=int, default=100,
-                        help="Training epochs (default: 100, early stop via --patience)")
-    parser.add_argument("--imgsz", type=int, default=640,
-                        help="Input image size")
-    parser.add_argument("--batch", type=int, default=0,
-                        help="Batch size (0=auto)")
-    parser.add_argument("--device", default="0",
-                        help="Device: cpu, 0, 0,1,2,3")
-    parser.add_argument("--dataset", default="coco2017",
-                        help="Dataset: coco2017, coco128, or path/to/data.yaml")
-    parser.add_argument("--quick", action="store_true",
-                        help="Quick test: use coco128 with given epochs")
-    parser.add_argument("--fresh", action="store_true",
-                        help="Force fresh start (ignore existing checkpoints)")
-    parser.add_argument("--weights", default=None,
-                        help="Path to model weights (for val mode)")
-    parser.add_argument("--tensorboard", action="store_true",
-                        help="Launch TensorBoard alongside training")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="DataLoader workers (0=none, 1-2=ok on Windows)")
-    parser.add_argument("--patience", type=int, default=10,
-                        help="Early stopping patience (epochs without mAP improvement)")
-    parser.add_argument("--name", default=None,
-                        help="Output run name (default: coco2017_train)")
-    parser.add_argument("--amp", action="store_true",
-                        help="Enable AMP mixed precision (faster but may be unstable on Windows)")
-    parser.add_argument("--cache", action="store_true",
-                        help="Cache images in RAM (needs 20+ GB)")
-    parser.add_argument("--max-time", type=float, default=0.0,
-                        help="Max training time in hours (0=unlimited). "
-                             "Training stops gracefully after current epoch.")
-    parser.add_argument("--mode", default="train",
-                        choices=["train", "val"], help="Operation mode")
+    parser.add_argument(
+        "--model",
+        default="yolo12n",
+        help="Model (yolo12n, yolo12s, yolo12m, yolo12l, yolo12x)",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=100,
+        help="Training epochs (default: 100, early stop via --patience)",
+    )
+    parser.add_argument("--imgsz", type=int, default=640, help="Input image size")
+    parser.add_argument("--batch", type=int, default=0, help="Batch size (0=auto)")
+    parser.add_argument("--device", default="0", help="Device: cpu, 0, 0,1,2,3")
+    parser.add_argument(
+        "--dataset",
+        default="coco2017",
+        help="Dataset: coco2017, coco128, or path/to/data.yaml",
+    )
+    parser.add_argument(
+        "--quick", action="store_true", help="Quick test: use coco128 with given epochs"
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Force fresh start (ignore existing checkpoints)",
+    )
+    parser.add_argument(
+        "--weights", default=None, help="Path to model weights (for val mode)"
+    )
+    parser.add_argument(
+        "--tensorboard",
+        action="store_true",
+        help="Launch TensorBoard alongside training",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="DataLoader workers (0=none, 1-2=ok on Windows)",
+    )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=10,
+        help="Early stopping patience (epochs without mAP improvement)",
+    )
+    parser.add_argument(
+        "--name", default=None, help="Output run name (default: coco2017_train)"
+    )
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="Enable AMP mixed precision (faster but may be unstable on Windows)",
+    )
+    parser.add_argument(
+        "--cache", action="store_true", help="Cache images in RAM (needs 20+ GB)"
+    )
+    parser.add_argument(
+        "--max-time",
+        type=float,
+        default=0.0,
+        help="Max training time in hours (0=unlimited). "
+        "Training stops gracefully after current epoch.",
+    )
+    parser.add_argument(
+        "--mode", default="train", choices=["train", "val"], help="Operation mode"
+    )
     args = parser.parse_args()
 
     if not check_env():

@@ -117,7 +117,9 @@ def main() -> int:
     # Convert model to TensorRT if specified
     if args.model:
         if not is_tensorrt_available():
-            logger.error("TensorRT is not available. Please install TensorRT for Jetson.")
+            logger.error(
+                "TensorRT is not available. Please install TensorRT for Jetson."
+            )
             return 1
 
         print(f"\nConverting model to TensorRT: {args.model}")
@@ -149,7 +151,7 @@ def main() -> int:
                 imgsz=args.imgsz,
                 force_rebuild=False,
             )
-            print(f"\nConversion successful!")
+            print("\nConversion successful!")
             print(f"Engine saved to: {engine_path}")
 
             # Verify engine

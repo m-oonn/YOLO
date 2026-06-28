@@ -6,23 +6,23 @@ import ElementPlus from 'unplugin-element-plus/vite'
 import viteCompression from 'vite-plugin-compression'
 
 const isProduction = process.env.NODE_ENV === 'production'
-const BASE = process.env.VITE_BASE || '/'
+const rawBase = process.env.VITE_BASE
+const BASE = rawBase ? `${rawBase.replace(/\/+$/, '')}/` : '/'
 
 export default defineConfig({
   base: BASE,
   plugins: [
     vue(),
     Components({
-      resolvers: [
-        ElementPlusResolver(),
-      ],
+      resolvers: [ElementPlusResolver()],
       directoryAsNamespace: false,
     }),
     ElementPlus({}),
-    isProduction && viteCompression({
-      verbose: false,
-      threshold: 10240,
-    }),
+    isProduction &&
+      viteCompression({
+        verbose: false,
+        threshold: 10240,
+      }),
   ].filter(Boolean),
   server: {
     port: 8080,
@@ -41,7 +41,7 @@ export default defineConfig({
     minify: 'esbuild',
     cssCodeSplit: true,
     sourcemap: false,
-    reportCompressedSize: false,  // 优化：禁用报告加速构建
+    reportCompressedSize: false, // 优化：禁用报告加速构建
     chunkSizeWarningLimit: 1000,
     // 优化：启用预加载和预取关键资源
     modulePreload: {
@@ -63,8 +63,6 @@ export default defineConfig({
         entryFileNames: 'js/[name]-[hash].js',
         chunkFileNames: 'js/[name]-[hash].js',
         assetFileNames: (info) => {
-          const infoDir = info.name.split('.')
-          const ext = infoDir[infoDir.length - 1]
           if (/\.(png|jpe?g|gif|svg|webp|ico)$/.test(info.name)) {
             return 'img/[name]-[hash][extname]'
           }

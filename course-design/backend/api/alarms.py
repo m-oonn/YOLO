@@ -21,8 +21,12 @@ def _get_engine():
 
 @router.get("/")
 def list_alarms(
-    status: str | None = Query(None, description="Filter by status: active, acknowledged, resolved, escalated"),
-    level: int | None = Query(None, description="Filter by level: 1=info, 2=warning, 3=critical"),
+    status: str | None = Query(
+        None, description="Filter by status: active, acknowledged, resolved, escalated"
+    ),
+    level: int | None = Query(
+        None, description="Filter by level: 1=info, 2=warning, 3=critical"
+    ),
     event_type: str | None = Query(None, description="Filter by event type"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -58,7 +62,11 @@ def alarm_levels():
 
     return {
         "levels": [
-            {"value": int(lv), "name": lv.name, "label": EVENT_LEVEL_LABELS.get(int(lv), "")}
+            {
+                "value": int(lv),
+                "name": lv.name,
+                "label": EVENT_LEVEL_LABELS.get(int(lv), ""),
+            }
             for lv in AlarmLevel
         ]
     }
@@ -70,7 +78,9 @@ def acknowledge_alarm(alarm_id: int):
     engine = _get_engine()
     success = engine.acknowledge(alarm_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Alarm not found or not in active/escalated state")
+        raise HTTPException(
+            status_code=404, detail="Alarm not found or not in active/escalated state"
+        )
     return {"status": "acknowledged", "alarm_id": alarm_id}
 
 
@@ -80,7 +90,9 @@ def resolve_alarm(alarm_id: int):
     engine = _get_engine()
     success = engine.resolve(alarm_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Alarm not found or already resolved")
+        raise HTTPException(
+            status_code=404, detail="Alarm not found or already resolved"
+        )
     return {"status": "resolved", "alarm_id": alarm_id}
 
 

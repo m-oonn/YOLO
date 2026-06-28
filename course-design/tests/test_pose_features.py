@@ -16,24 +16,31 @@ if COURSE_DIR not in sys.path:
     sys.path.insert(0, COURSE_DIR)
 
 from core.constants import NUM_SKELETON_KEYPOINTS
-from core.skeleton import Skeleton, SkeletonKeypoint as Keypoint
 from core.pose_features import (
-    PerFrameFeatures,
-    PerFrameFeatureExtractor,
-    TemporalFeatures,
-    TemporalFeatureExtractor,
-    InteractionFeatures,
     InteractionFeatureExtractor,
+    InteractionFeatures,
+    PerFrameFeatureExtractor,
+    PerFrameFeatures,
+    TemporalFeatureExtractor,
+    TemporalFeatures,
     normalize_features,
 )
+from core.skeleton import Skeleton
+from core.skeleton import SkeletonKeypoint as Keypoint
 
 
 class TestPerFrameFeatures:
     def test_to_vector_shape(self):
         feat = PerFrameFeatures(
-            track_id=1, torso_angle=45.0, center_x=0.5, center_y=0.5,
-            head_height=0.2, body_span=0.3, avg_kp_confidence=0.8,
-            valid_kp_ratio=0.9, skeleton_quality=0.85,
+            track_id=1,
+            torso_angle=45.0,
+            center_x=0.5,
+            center_y=0.5,
+            head_height=0.2,
+            body_span=0.3,
+            avg_kp_confidence=0.8,
+            valid_kp_ratio=0.9,
+            skeleton_quality=0.85,
         )
         vec = feat.to_vector()
         # 8 base + 6 bone angles = 14
@@ -50,11 +57,13 @@ class TestPerFrameFeatures:
 class TestPerFrameFeatureExtractor:
     def _make_valid_skel(self) -> Skeleton:
         kps = [Keypoint(100, 200, 0.9) for _ in range(NUM_SKELETON_KEYPOINTS)]
-        kps[5] = Keypoint(120, 150, 0.9)   # left_shoulder
-        kps[6] = Keypoint(180, 150, 0.9)   # right_shoulder
+        kps[5] = Keypoint(120, 150, 0.9)  # left_shoulder
+        kps[6] = Keypoint(180, 150, 0.9)  # right_shoulder
         kps[11] = Keypoint(140, 300, 0.9)  # left_hip
         kps[12] = Keypoint(160, 300, 0.9)  # right_hip
-        sk = Skeleton(track_id=1, keypoints=kps, bbox={"x1": 100, "y1": 150, "x2": 200, "y2": 350})
+        sk = Skeleton(
+            track_id=1, keypoints=kps, bbox={"x1": 100, "y1": 150, "x2": 200, "y2": 350}
+        )
         sk.average_confidence = 0.9
         sk.valid_count = 17
         return sk
@@ -71,7 +80,9 @@ class TestPerFrameFeatureExtractor:
     def test_extract_low_quality(self):
         extractor = PerFrameFeatureExtractor()
         kps = [Keypoint(0, 0, 0.0) for _ in range(5)]
-        skel = Skeleton(track_id=1, keypoints=kps, bbox={"x1": 0, "y1": 0, "x2": 10, "y2": 10})
+        skel = Skeleton(
+            track_id=1, keypoints=kps, bbox={"x1": 0, "y1": 0, "x2": 10, "y2": 10}
+        )
         skel.average_confidence = 0.1
         skel.valid_count = 0
         feat = extractor.extract(skel, 640, 480)
@@ -79,7 +90,9 @@ class TestPerFrameFeatureExtractor:
 
     def test_extract_empty(self):
         extractor = PerFrameFeatureExtractor()
-        skel = Skeleton(track_id=1, keypoints=[], bbox={"x1": 0, "y1": 0, "x2": 10, "y2": 10})
+        skel = Skeleton(
+            track_id=1, keypoints=[], bbox={"x1": 0, "y1": 0, "x2": 10, "y2": 10}
+        )
         skel.average_confidence = 0.0
         skel.valid_count = 0
         feat = extractor.extract(skel, 640, 480)
@@ -95,11 +108,11 @@ class TestTemporalFeatures:
 
     def test_is_empty(self):
         feat = TemporalFeatures()
-        assert feat.is_empty() == True
+        assert feat.is_empty()
 
     def test_not_empty(self):
         feat = TemporalFeatures(velocities=np.ones(NUM_SKELETON_KEYPOINTS * 2))
-        assert feat.is_empty() == False
+        assert not feat.is_empty()
 
 
 class TestTemporalFeatureExtractor:
@@ -147,7 +160,11 @@ class TestInteractionFeatures:
 
 class TestInteractionFeatureExtractor:
     def _make_skel(self, track_id, kps):
-        sk = Skeleton(track_id=track_id, keypoints=kps, bbox={"x1": 0, "y1": 0, "x2": 200, "y2": 200})
+        sk = Skeleton(
+            track_id=track_id,
+            keypoints=kps,
+            bbox={"x1": 0, "y1": 0, "x2": 200, "y2": 200},
+        )
         sk.average_confidence = 0.9
         sk.valid_count = 17
         return sk
@@ -159,7 +176,7 @@ class TestInteractionFeatureExtractor:
         skel_b = self._make_skel(2, kps_b)
         feat = InteractionFeatureExtractor.extract(skel_a, skel_b, 640, 480)
         assert feat.center_distance > 0
-        assert feat.contact_detected == False
+        assert not feat.contact_detected
 
     def test_extract_close(self):
         kps_a = [Keypoint(100, 100, 0.9) for _ in range(NUM_SKELETON_KEYPOINTS)]
@@ -168,13 +185,16 @@ class TestInteractionFeatureExtractor:
         skel_b = self._make_skel(2, kps_b)
         feat = InteractionFeatureExtractor.extract(skel_a, skel_b, 640, 480)
         assert feat.center_distance < 10
-        assert feat.contact_detected == True
+        assert feat.contact_detected
 
 
 class TestNormalizeFeatures:
     def test_clamps_values(self):
         feat = PerFrameFeatures(
-            track_id=1, torso_angle=200.0, center_x=1.5, center_y=-0.5,
+            track_id=1,
+            torso_angle=200.0,
+            center_x=1.5,
+            center_y=-0.5,
         )
         normalized = normalize_features(feat)
         assert normalized.torso_angle == 180.0
@@ -183,7 +203,10 @@ class TestNormalizeFeatures:
 
     def test_preserves_valid_values(self):
         feat = PerFrameFeatures(
-            track_id=1, torso_angle=45.0, center_x=0.5, center_y=0.5,
+            track_id=1,
+            torso_angle=45.0,
+            center_x=0.5,
+            center_y=0.5,
         )
         normalized = normalize_features(feat)
         assert normalized.torso_angle == 45.0

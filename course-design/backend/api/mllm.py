@@ -33,6 +33,7 @@ def get_mllm_status():
         }
     try:
         from core.config import load_config
+
         cfg = load_config()
         return {
             "available": True,
@@ -69,8 +70,13 @@ def toggle_mllm(req: MLLMEnableRequest):
     if req.enabled:
         try:
             # Force enable in sidecar config (MLLMConfig is frozen, so replace)
-            if not sidecar._config.enabled or sidecar._config.shadow_mode != req.shadow_mode:
-                sidecar._config = replace(sidecar._config, enabled=True, shadow_mode=req.shadow_mode)
+            if (
+                not sidecar._config.enabled
+                or sidecar._config.shadow_mode != req.shadow_mode
+            ):
+                sidecar._config = replace(
+                    sidecar._config, enabled=True, shadow_mode=req.shadow_mode
+                )
             sidecar.initialize()
             return {"status": "success", "message": "MLLM sidecar enabled"}
         except Exception as e:

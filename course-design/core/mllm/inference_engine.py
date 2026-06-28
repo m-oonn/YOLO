@@ -28,26 +28,26 @@ logger = logging.getLogger(__name__)
 
 class BaseVLMBackend(ABC):
     @abstractmethod
-    def load(self) -> None:
-        ...
+    def load(self) -> None: ...
 
     @abstractmethod
-    def generate(self, prompt: str, image: np.ndarray | None = None) -> str:
-        ...
+    def generate(
+        self,
+        prompt: str,
+        image: np.ndarray | None = None,
+        images: list[np.ndarray] | None = None,
+    ) -> str: ...
 
     @abstractmethod
-    def unload(self) -> None:
-        ...
-
-    @property
-    @abstractmethod
-    def is_loaded(self) -> bool:
-        ...
+    def unload(self) -> None: ...
 
     @property
     @abstractmethod
-    def backend_name(self) -> str:
-        ...
+    def is_loaded(self) -> bool: ...
+
+    @property
+    @abstractmethod
+    def backend_name(self) -> str: ...
 
 
 class MockVLMBackend(BaseVLMBackend):
@@ -59,7 +59,12 @@ class MockVLMBackend(BaseVLMBackend):
         self._loaded = True
         logger.info("MockVLMBackend loaded")
 
-    def generate(self, prompt: str, image: np.ndarray | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        image: np.ndarray | None = None,
+        images: list[np.ndarray] | None = None,
+    ) -> str:
         if not self._loaded:
             return ""
         if "告警验证" in prompt or "verdict" in prompt:
@@ -101,8 +106,7 @@ class PyTorchVLMBackend(BaseVLMBackend):
     def load(self) -> None:
         """Load the PyTorch VLM model with optimizations."""
         try:
-            from transformers import Qwen2VLForConditionalGeneration
-            from transformers import AutoProcessor
+            from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
             model_path = self._config.model_path
             logger.info(f"Loading PyTorch VLM model from: {model_path}")
@@ -110,6 +114,7 @@ class PyTorchVLMBackend(BaseVLMBackend):
             device = self._config.device
             if device == "auto":
                 from core.gpu_manager import GPUManager
+
                 gm = GPUManager()
                 device = gm.resolve_device("auto")
 
@@ -118,8 +123,10 @@ class PyTorchVLMBackend(BaseVLMBackend):
             if self._config.half_precision and device.startswith("cuda"):
                 load_kwargs["torch_dtype"] = "auto"
 
-            self._processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
-            self._model = Qwen2VLForConditionalGeneration.from_pretrained(model_path, **load_kwargs)
+            self._processor = AutoProcessor.from_pretrained(model_path)
+            self._model = Qwen2VLForConditionalGeneration.from_pretrained(
+                model_path, **load_kwargs
+            )
 
             if device.startswith("cuda") and self._config.half_precision:
                 self._model = self._model.half()
@@ -127,7 +134,7 @@ class PyTorchVLMBackend(BaseVLMBackend):
             self._model = self._model.to(device)
             self._model.eval()
 
-            if hasattr(self._model, 'generate'):
+            if hasattr(self._model, "generate"):
                 logger.info("Model loaded, enabling optimizations")
 
             self._loaded = True
@@ -138,18 +145,31 @@ class PyTorchVLMBackend(BaseVLMBackend):
             self._loaded = False
             raise
 
-    def generate(self, prompt: str, image: np.ndarray | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        image: np.ndarray | None = None,
+        images: list[np.ndarray] | None = None,
+    ) -> str:
         """Generate response with caching and optimizations.
 
         Performance Optimizations:
         - Prompt caching to avoid redundant inference
         - Streaming-first token generation
         - Efficient tensor management
+        - Multi-frame input: pass a chronological list of frames so the model
+          can perceive motion (a still frame cannot convey a fight in progress)
         """
         if not self._loaded or self._model is None:
             return ""
 
-        cache_key = f"{prompt}:{hash(str(image))}" if image is not None else prompt
+        # Normalize to a frame list; `images` takes precedence over `image`.
+        frame_list = images if images else ([image] if image is not None else [])
+        cache_key = (
+            f"{prompt}:{hash(tuple(hash(f.tobytes()) for f in frame_list))}"
+            if frame_list
+            else prompt
+        )
         if cache_key in self._generation_cache:
             self._cache_hits += 1
             return self._generation_cache[cache_key]
@@ -157,37 +177,56 @@ class PyTorchVLMBackend(BaseVLMBackend):
         self._cache_misses += 1
 
         try:
+            import cv2
             import torch
 
-            image_pil = None
-            if image is not None:
+            image_pils: list = []
+            for fr in frame_list:
                 from PIL import Image
-                image_pil = Image.fromarray(image) if isinstance(image, np.ndarray) else image
 
-            if image_pil:
-                from transformers import Qwen2VLImageProcessor
-                if isinstance(self._processor.image_processor, Qwen2VLImageProcessor):
-                    text = self._processor.apply_chat_template(
-                        [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
-                        tokenize=False, add_generation_prompt=True
+                if isinstance(fr, np.ndarray):
+                    # OpenCV uses BGR, Qwen2-VL expects RGB
+                    image_pils.append(
+                        Image.fromarray(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB))
                     )
-                    inputs = self._processor(
-                        text=[text],
-                        images=[image_pil],
-                        return_tensors="pt",
-                    ).to(self._device)
-                else:
-                    inputs = self._processor(
-                        text=[prompt],
-                        images=[image_pil],
-                        return_tensors="pt",
-                    ).to(self._device)
+                elif fr is not None:
+                    image_pils.append(fr)
+
+            if image_pils:
+                # Qwen2-VL: attach all frames as a chronological image sequence
+                content = [{"type": "image", "image": im} for im in image_pils]
+                content.append({"type": "text", "text": prompt})
+                messages = [{"role": "user", "content": content}]
+                text = self._processor.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+                inputs = self._processor(
+                    text=[text],
+                    images=image_pils,
+                    return_tensors="pt",
+                )
+                # Verify image pad expansion before moving to device
+                image_pad_id = self._processor.tokenizer.convert_tokens_to_ids(
+                    "<|image_pad|>"
+                )
+                n_pads = (inputs.input_ids[0] == image_pad_id).sum().item()
+                logger.info(
+                    "MLLM input: %d frames, %d image_pad tokens, input_len=%d, device=%s",
+                    len(image_pils),
+                    n_pads,
+                    inputs.input_ids.shape[1],
+                    self._device,
+                )
+                inputs = inputs.to(self._device)
             else:
                 text = self._processor.apply_chat_template(
                     [{"role": "user", "content": prompt}],
-                    tokenize=False, add_generation_prompt=True
+                    tokenize=False,
+                    add_generation_prompt=True,
                 )
-                inputs = self._processor(text=[text], return_tensors="pt").to(self._device)
+                inputs = self._processor(text=[text], return_tensors="pt").to(
+                    self._device
+                )
 
             with torch.no_grad():
                 output_ids = self._model.generate(
@@ -198,7 +237,7 @@ class PyTorchVLMBackend(BaseVLMBackend):
                     use_cache=True,
                 )
 
-            generated_ids = output_ids[:, inputs.input_ids.shape[1]:]
+            generated_ids = output_ids[:, inputs.input_ids.shape[1] :]
             result = self._processor.batch_decode(
                 generated_ids, skip_special_tokens=True
             )[0]
@@ -219,8 +258,9 @@ class PyTorchVLMBackend(BaseVLMBackend):
         self._generation_cache.clear()
         self._loaded = False
         try:
-            import torch
             import gc
+
+            import torch
 
             gc.collect()
             if torch.cuda.is_available():
@@ -242,7 +282,8 @@ class PyTorchVLMBackend(BaseVLMBackend):
             "hits": self._cache_hits,
             "misses": self._cache_misses,
             "size": len(self._generation_cache),
-            "hit_rate": self._cache_hits / max(1, self._cache_hits + self._cache_misses),
+            "hit_rate": self._cache_hits
+            / max(1, self._cache_hits + self._cache_misses),
         }
 
 
@@ -283,6 +324,7 @@ class TensorRTVLMBackend(BaseVLMBackend):
     def _has_onnxruntime_trt() -> bool:
         try:
             import onnxruntime as ort
+
             return "TensorrtExecutionProvider" in ort.get_available_providers()
         except Exception:
             return False
@@ -291,6 +333,7 @@ class TensorRTVLMBackend(BaseVLMBackend):
     def _has_torch_tensorrt() -> bool:
         try:
             import torch_tensorrt  # noqa: F401
+
             return True
         except Exception:
             return False
@@ -299,6 +342,7 @@ class TensorRTVLMBackend(BaseVLMBackend):
     def _has_torch_compile() -> bool:
         try:
             import torch
+
             return hasattr(torch, "compile")
         except Exception:
             return False
@@ -309,6 +353,7 @@ class TensorRTVLMBackend(BaseVLMBackend):
         logger.info("TensorRTVLMBackend: probing acceleration capabilities …")
 
         from core.gpu_manager import GPUManager
+
         gm = GPUManager()
         device = gm.resolve_device(self._config.device or "auto")
         self._device = "cuda:0" if device.startswith("cuda") else device
@@ -332,30 +377,40 @@ class TensorRTVLMBackend(BaseVLMBackend):
         self._loaded = True
         logger.info(
             "TensorRTVLMBackend loaded on %s (tier %d, %s precision)",
-            self._device, self._active_tier,
+            self._device,
+            self._active_tier,
             "half" if self._config.half_precision else "full",
         )
 
     def _load_pytorch_model(self) -> None:
         try:
-            from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+            from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
         except ImportError:
-            logger.warning("transformers not installed; TensorRT backend needs a PyTorch model")
+            logger.warning(
+                "transformers not installed; TensorRT backend needs a PyTorch model"
+            )
             self._model = None
             self._processor = None
             return
 
         model_path = self._config.model_path
         if not model_path or not os.path.exists(model_path):
-            logger.warning("Model path %s not found, falling back to HuggingFace hub", model_path)
-            model_path = "Qwen/Qwen2-VL-2B-Instruct"
+            logger.warning(
+                "Model path %s not found, falling back to HuggingFace hub", model_path
+            )
+            from core.mllm.export_utils import MODEL_REGISTRY
+
+            entry = MODEL_REGISTRY.get(self._config.model_type)
+            model_path = entry["hf_id"] if entry else "Qwen/Qwen2-VL-7B-Instruct"
 
         load_kwargs: dict[str, Any] = {"trust_remote_code": True}
         if self._config.half_precision and self._device.startswith("cuda"):
             load_kwargs["torch_dtype"] = "auto"
 
         self._processor = AutoProcessor.from_pretrained(model_path, use_fast=True)
-        self._model = Qwen2VLForConditionalGeneration.from_pretrained(model_path, **load_kwargs)
+        self._model = Qwen2VLForConditionalGeneration.from_pretrained(
+            model_path, **load_kwargs
+        )
 
         if self._device.startswith("cuda") and self._config.half_precision:
             self._model = self._model.half()
@@ -371,13 +426,19 @@ class TensorRTVLMBackend(BaseVLMBackend):
         if self._active_tier >= 3:
             try:
                 import torch_tensorrt
+
                 self._compiled_model = torch_tensorrt.compile(
                     self._model,
-                    inputs=[torch_tensorrt.Input(
-                        min_shape=(1, 1), opt_shape=(1, 128), max_shape=(1, 512),
-                    )],
+                    inputs=[
+                        torch_tensorrt.Input(
+                            min_shape=(1, 1),
+                            opt_shape=(1, 128),
+                            max_shape=(1, 512),
+                        )
+                    ],
                     enabled_precisions={torch.float16}
-                    if self._config.half_precision else {torch.float32},
+                    if self._config.half_precision
+                    else {torch.float32},
                 )
                 logger.info("torch_tensorrt.compile succeeded")
             except Exception as e:
@@ -392,7 +453,9 @@ class TensorRTVLMBackend(BaseVLMBackend):
         if self._active_tier == 1:
             try:
                 self._compiled_model = torch.compile(
-                    self._model, mode="reduce-overhead", fullgraph=False,
+                    self._model,
+                    mode="reduce-overhead",
+                    fullgraph=False,
                 )
                 dummy_ids = torch.randint(0, 1000, (1, 5), device=self._device)
                 with torch.no_grad():
@@ -408,15 +471,24 @@ class TensorRTVLMBackend(BaseVLMBackend):
 
             engine_path = self._find_trt_engine()
             if engine_path is None:
-                logger.info("No pre-built TensorRT engine; skip Tier 2 vision acceleration")
+                logger.info(
+                    "No pre-built TensorRT engine; skip Tier 2 vision acceleration"
+                )
                 self._active_tier = 1
                 return
 
             sess_options = ort.SessionOptions()
-            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            sess_options.graph_optimization_level = (
+                ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            )
             self._vision_session = ort.InferenceSession(
-                engine_path, sess_options=sess_options,
-                providers=["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
+                engine_path,
+                sess_options=sess_options,
+                providers=[
+                    "TensorrtExecutionProvider",
+                    "CUDAExecutionProvider",
+                    "CPUExecutionProvider",
+                ],
             )
             logger.info("ONNX RT TensorRT EP session created for vision encoder")
         except Exception as e:
@@ -425,19 +497,29 @@ class TensorRTVLMBackend(BaseVLMBackend):
 
     @staticmethod
     def _find_trt_engine() -> str | None:
-        for c in ["models/trt_engines/vision_encoder.engine",
-                   "models/trt_engines/qwen2_vl_vision.engine",
-                   "models/onnx/vision_encoder.onnx"]:
+        for c in [
+            "models/trt_engines/vision_encoder.engine",
+            "models/trt_engines/qwen2_vl_vision.engine",
+            "models/onnx/vision_encoder.onnx",
+        ]:
             if os.path.exists(c):
                 return c
         return None
 
     # ── inference ────────────────────────────────────────────────
 
-    def generate(self, prompt: str, image: np.ndarray | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        image: np.ndarray | None = None,
+        images: list[np.ndarray] | None = None,
+    ) -> str:
         if not self._loaded or self._model is None:
             return ""
 
+        # `images` takes precedence; TRT path uses the most recent frame.
+        if images:
+            image = images[-1]
         cache_key = f"{prompt}:{hash(image.tobytes() if image is not None else '')}"
         if cache_key in self._generation_cache:
             self._cache_hits += 1
@@ -450,24 +532,44 @@ class TensorRTVLMBackend(BaseVLMBackend):
 
             image_pil = None
             if image is not None:
-                image_pil = Image.fromarray(image) if isinstance(image, np.ndarray) else image
+                image_pil = (
+                    Image.fromarray(image) if isinstance(image, np.ndarray) else image
+                )
 
             if image_pil is not None:
                 text = self._processor.apply_chat_template(
-                    [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}],
-                    tokenize=False, add_generation_prompt=True,
+                    [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "image"},
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ],
+                    tokenize=False,
+                    add_generation_prompt=True,
                 )
                 inputs = self._processor(
-                    text=[text], images=[image_pil], return_tensors="pt",
+                    text=[text],
+                    images=[image_pil],
+                    return_tensors="pt",
                 ).to(self._device)
             else:
                 text = self._processor.apply_chat_template(
                     [{"role": "user", "content": prompt}],
-                    tokenize=False, add_generation_prompt=True,
+                    tokenize=False,
+                    add_generation_prompt=True,
                 )
-                inputs = self._processor(text=[text], return_tensors="pt").to(self._device)
+                inputs = self._processor(text=[text], return_tensors="pt").to(
+                    self._device
+                )
 
-            inference_fn = self._compiled_model if self._compiled_model is not None else self._model
+            inference_fn = (
+                self._compiled_model
+                if self._compiled_model is not None
+                else self._model
+            )
             with torch.no_grad():
                 output_ids = inference_fn.generate(
                     **inputs,
@@ -477,8 +579,10 @@ class TensorRTVLMBackend(BaseVLMBackend):
                     use_cache=True,
                 )
 
-            generated_ids = output_ids[:, inputs.input_ids.shape[1]:]
-            result = self._processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            generated_ids = output_ids[:, inputs.input_ids.shape[1] :]
+            result = self._processor.batch_decode(
+                generated_ids, skip_special_tokens=True
+            )[0]
 
             if len(self._generation_cache) >= 1000:
                 keys = list(self._generation_cache.keys())
@@ -499,7 +603,10 @@ class TensorRTVLMBackend(BaseVLMBackend):
         self._vision_session = None
         self._loaded = False
         try:
-            import torch, gc
+            import gc
+
+            import torch
+
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -512,8 +619,12 @@ class TensorRTVLMBackend(BaseVLMBackend):
 
     @property
     def backend_name(self) -> str:
-        tier_label = {0: "tensorrt-eager", 1: "tensorrt-inductor",
-                       2: "tensorrt-ort", 3: "tensorrt-full"}
+        tier_label = {
+            0: "tensorrt-eager",
+            1: "tensorrt-inductor",
+            2: "tensorrt-ort",
+            3: "tensorrt-full",
+        }
         return tier_label.get(self._active_tier, "tensorrt")
 
     def get_cache_stats(self) -> dict[str, int]:
@@ -521,7 +632,8 @@ class TensorRTVLMBackend(BaseVLMBackend):
             "hits": self._cache_hits,
             "misses": self._cache_misses,
             "size": len(self._generation_cache),
-            "hit_rate": self._cache_hits / max(1, self._cache_hits + self._cache_misses),
+            "hit_rate": self._cache_hits
+            / max(1, self._cache_hits + self._cache_misses),
         }
 
 
@@ -537,7 +649,12 @@ class BatchVLMProcessor:
     - Improved throughput for high-volume inference
     """
 
-    def __init__(self, backend: BaseVLMBackend, max_batch_size: int = 4, max_wait_ms: float = 100.0):
+    def __init__(
+        self,
+        backend: BaseVLMBackend,
+        max_batch_size: int = 4,
+        max_wait_ms: float = 100.0,
+    ):
         """Initialize batch processor.
 
         Args:
@@ -586,8 +703,8 @@ class BatchVLMProcessor:
         with self._lock:
             if not self._pending:
                 return []
-            batch = self._pending[:self._max_batch_size]
-            self._pending = self._pending[self._max_batch_size:]
+            batch = self._pending[: self._max_batch_size]
+            self._pending = self._pending[self._max_batch_size :]
             self._last_batch_time = time.time()
 
         results = []
@@ -673,16 +790,23 @@ class MLLMInferenceEngine:
             backend.load()
             self._backend = backend
             if self._use_batching:
-                self._batch_processor = BatchVLMProcessor(backend, max_batch_size=4, max_wait_ms=100.0)
+                self._batch_processor = BatchVLMProcessor(
+                    backend, max_batch_size=4, max_wait_ms=100.0
+                )
                 logger.info("Batch processing enabled for MLLM inference")
-            logger.info(f"MLLM inference engine initialized with {backend.backend_name}")
+            logger.info(
+                f"MLLM inference engine initialized with {backend.backend_name}"
+            )
         except Exception as e:
             logger.error(f"Primary backend ({backend.backend_name}) failed: {e}")
             if not isinstance(backend, MockVLMBackend):
-                logger.info("Falling back to MockVLMBackend")
+                logger.warning(
+                    "MLLM model load failed, falling back to MockVLMBackend — scene descriptions will be synthetic"
+                )
                 mock = MockVLMBackend(self._config)
                 mock.load()
                 self._backend = mock
+                self._stats["mock_fallback"] = True
 
     def _resolve_backend(self) -> BaseVLMBackend:
         """Resolve the appropriate backend based on configuration."""
@@ -695,7 +819,12 @@ class MLLMInferenceEngine:
             return PyTorchVLMBackend(self._config)
         return PyTorchVLMBackend(self._config)
 
-    def generate(self, prompt: str, image: np.ndarray | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        image: np.ndarray | None = None,
+        images: list[np.ndarray] | None = None,
+    ) -> str:
         """Generate response with comprehensive error handling.
 
         Performance Monitoring:
@@ -708,7 +837,7 @@ class MLLMInferenceEngine:
 
         t0 = time.time()
         try:
-            result = self._backend.generate(prompt, image)
+            result = self._backend.generate(prompt, image=image, images=images)
             latency = (time.time() - t0) * 1000
 
             self._update_latency_stats(latency)
@@ -750,13 +879,24 @@ class MLLMInferenceEngine:
         stats["loaded"] = self._backend.is_loaded if self._backend else False
 
         # Replace non-JSON-serializable float('inf') with None
-        for key in ("min_latency_ms", "max_latency_ms", "avg_latency_ms",
-                    "p50_latency_ms", "p95_latency_ms"):
-            if key in stats and not isinstance(stats[key], (int, float)) or \
-               (isinstance(stats.get(key), float) and (stats[key] == float("inf") or stats[key] != stats[key])):
+        for key in (
+            "min_latency_ms",
+            "max_latency_ms",
+            "avg_latency_ms",
+            "p50_latency_ms",
+            "p95_latency_ms",
+        ):
+            if (
+                key in stats
+                and not isinstance(stats[key], (int, float))
+                or (
+                    isinstance(stats.get(key), float)
+                    and (stats[key] == float("inf") or stats[key] != stats[key])
+                )
+            ):
                 stats[key] = None
 
-        if hasattr(self._backend, 'get_cache_stats'):
+        if hasattr(self._backend, "get_cache_stats"):
             stats["cache"] = self._backend.get_cache_stats()
 
         if self._batch_processor:

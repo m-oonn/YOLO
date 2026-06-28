@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -17,8 +19,15 @@ from core.video_archiver import ArchivedClip, VideoClipRecorder
 
 @pytest.fixture
 def tmp_output_dir():
-    with tempfile.TemporaryDirectory() as d:
+    # On Windows the SQLite/VideoWriter handles may still be held when the
+    # test ends, causing PermissionError during temp-dir cleanup.  Swallow
+    # that race instead of failing the teardown.
+    d = tempfile.mkdtemp()
+    try:
         yield d
+    finally:
+        with contextlib.suppress(PermissionError):
+            shutil.rmtree(d)
 
 
 def _make_frame(w=160, h=120):
@@ -34,7 +43,13 @@ class TestInit:
         r.shutdown()
 
     def test_custom(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=5, post_seconds=2, clip_fps=10, max_clips=10, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=5,
+            post_seconds=2,
+            clip_fps=10,
+            max_clips=10,
+            output_dir=tmp_output_dir,
+        )
         assert r._pre_seconds == 5
         assert r._max_clips == 10
         r.shutdown()
@@ -58,7 +73,9 @@ class TestRingBuffer:
 
 class TestTrigger:
     def test_starts_recording(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=2, post_seconds=1, clip_fps=5, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=2, post_seconds=1, clip_fps=5, output_dir=tmp_output_dir
+        )
         for _ in range(15):
             r.feed_frame(_make_frame())
         cid = r.trigger_clip("fall")
@@ -67,7 +84,9 @@ class TestTrigger:
         r.shutdown()
 
     def test_merges_during_recording(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=2, post_seconds=3, clip_fps=5, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=2, post_seconds=3, clip_fps=5, output_dir=tmp_output_dir
+        )
         for _ in range(15):
             r.feed_frame(_make_frame())
         assert r.trigger_clip("fall") is not None
@@ -78,7 +97,13 @@ class TestTrigger:
 
 class TestClipWrite:
     def test_writes_mp4(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=1, clip_fps=5, jpeg_quality=30, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1,
+            post_seconds=1,
+            clip_fps=5,
+            jpeg_quality=30,
+            output_dir=tmp_output_dir,
+        )
         for _ in range(10):
             r.feed_frame(_make_frame())
         r.trigger_clip("run")
@@ -91,7 +116,13 @@ class TestClipWrite:
 
 class TestCRUD:
     def test_get_clips(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=1, clip_fps=5, jpeg_quality=30, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1,
+            post_seconds=1,
+            clip_fps=5,
+            jpeg_quality=30,
+            output_dir=tmp_output_dir,
+        )
         for _ in range(10):
             r.feed_frame(_make_frame())
         r.trigger_clip("fight")
@@ -104,7 +135,13 @@ class TestCRUD:
         assert os.path.exists(clips[0].file_path)
 
     def test_filter_by_type(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=1, clip_fps=5, jpeg_quality=30, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1,
+            post_seconds=1,
+            clip_fps=5,
+            jpeg_quality=30,
+            output_dir=tmp_output_dir,
+        )
         for _ in range(10):
             r.feed_frame(_make_frame())
         r.trigger_clip("fall")
@@ -115,7 +152,13 @@ class TestCRUD:
         assert len(r.get_clips(event_type="run")) == 0
 
     def test_delete(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=1, clip_fps=5, jpeg_quality=30, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1,
+            post_seconds=1,
+            clip_fps=5,
+            jpeg_quality=30,
+            output_dir=tmp_output_dir,
+        )
         for _ in range(10):
             r.feed_frame(_make_frame())
         r.trigger_clip("intrusion")
@@ -133,7 +176,13 @@ class TestCRUD:
         r.shutdown()
 
     def test_count(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=1, clip_fps=5, jpeg_quality=30, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1,
+            post_seconds=1,
+            clip_fps=5,
+            jpeg_quality=30,
+            output_dir=tmp_output_dir,
+        )
         assert r.get_clip_count() == 0
         for _ in range(10):
             r.feed_frame(_make_frame())
@@ -146,7 +195,14 @@ class TestCRUD:
 
 class TestPruning:
     def test_caps_clips(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=1, clip_fps=5, jpeg_quality=30, max_clips=3, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1,
+            post_seconds=1,
+            clip_fps=5,
+            jpeg_quality=30,
+            max_clips=3,
+            output_dir=tmp_output_dir,
+        )
         for i in range(5):
             for _ in range(10):
                 r.feed_frame(_make_frame())
@@ -165,7 +221,9 @@ class TestEdgeCases:
         assert len(list(Path(tmp_output_dir).glob("*.mp4"))) == 0
 
     def test_shutdown_during_recording(self, tmp_output_dir):
-        r = VideoClipRecorder(pre_seconds=1, post_seconds=5, clip_fps=5, output_dir=tmp_output_dir)
+        r = VideoClipRecorder(
+            pre_seconds=1, post_seconds=5, clip_fps=5, output_dir=tmp_output_dir
+        )
         for _ in range(10):
             r.feed_frame(_make_frame())
         r.trigger_clip("fall")

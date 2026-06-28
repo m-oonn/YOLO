@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.detection_manager import DetectionManager
+from core.config import AppConfig, PoseConfig
 from core.pipeline import DetectionPipeline
 
 
@@ -136,16 +137,17 @@ class TestPipelineCloseDoesNotCloseStore:
         must not close that store, otherwise subsequent detections will get
         a closed SQLite connection."""
         mock_store = MagicMock()
-        mock_cfg = MagicMock()
-        mock_cfg.model_path = "yolo11n.pt"
-        mock_cfg.pose.enabled = False
-        mock_cfg.pose.process_interval = 2
-        mock_cfg.output_dir = "/tmp"
-        mock_cfg.snapshots_dir = "/tmp/snapshots"
-        mock_cfg.inference_scale = 1.0
-        mock_cfg.jpeg_quality = 80
+        mock_cfg = AppConfig(
+            model_path="yolo11n.pt",
+            output_dir="/tmp",
+            inference_scale=1.0,
+            jpeg_quality=80,
+            pose=PoseConfig(enabled=False, process_interval=2),
+            fall_model_path="",
+            fight_model_path="",
+        )
 
-        with patch("core.pipeline.YOLO") as mock_yolo:
+        with patch("core.pipeline.YOLO"):
             pipeline = DetectionPipeline(mock_cfg, store=mock_store)
             pipeline.close()
 
@@ -154,14 +156,15 @@ class TestPipelineCloseDoesNotCloseStore:
     def test_no_store_provided_close_does_not_crash(self):
         """When no store is provided (pipeline creates its own), close() should
         still work without error."""
-        mock_cfg = MagicMock()
-        mock_cfg.model_path = "yolo11n.pt"
-        mock_cfg.pose.enabled = False
-        mock_cfg.pose.process_interval = 2
-        mock_cfg.output_dir = "/tmp"
-        mock_cfg.snapshots_dir = "/tmp/snapshots"
-        mock_cfg.inference_scale = 1.0
-        mock_cfg.jpeg_quality = 80
+        mock_cfg = AppConfig(
+            model_path="yolo11n.pt",
+            output_dir="/tmp",
+            inference_scale=1.0,
+            jpeg_quality=80,
+            pose=PoseConfig(enabled=False, process_interval=2),
+            fall_model_path="",
+            fight_model_path="",
+        )
 
         with (
             patch("core.pipeline.YOLO"),

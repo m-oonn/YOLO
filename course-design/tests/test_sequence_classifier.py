@@ -9,12 +9,12 @@ from unittest.mock import patch
 
 import numpy as np
 
+from core.config import SequenceModelConfig
 from core.sequence_classifier import (
     FeatureSequenceBuffer,
     LSTMBranch,
     ModelInferenceEngine,
 )
-from core.config import SequenceModelConfig
 
 
 class TestFeatureSequenceBuffer:
@@ -101,23 +101,25 @@ class TestLSTMBranch:
 
     def test_load_onnx_import_error(self):
         lstm = LSTMBranch()
-        with patch.dict("sys.modules", {"onnxruntime": None}):
-            with patch("builtins.__import__", side_effect=ImportError("no onnx")):
-                result = lstm.load_onnx("nonexistent.onnx")
-                assert result is False
-                assert lstm.is_loaded is False
+        with (
+            patch.dict("sys.modules", {"onnxruntime": None}),
+            patch("builtins.__import__", side_effect=ImportError("no onnx")),
+        ):
+            result = lstm.load_onnx("nonexistent.onnx")
+            assert result is False
+            assert lstm.is_loaded is False
 
 
 class TestModelInferenceEngine:
     def make_config(self, **kwargs):
-        defaults = dict(
-            enabled=False,
-            shadow_mode=True,
-            confidence_threshold=0.5,
-            inference_device="cpu",
-            model_path="",
-            sequence_length=8,
-        )
+        defaults = {
+            "enabled": False,
+            "shadow_mode": True,
+            "confidence_threshold": 0.5,
+            "inference_device": "cpu",
+            "model_path": "",
+            "sequence_length": 8,
+        }
         defaults.update(kwargs)
         return SequenceModelConfig(**defaults)
 
@@ -139,7 +141,9 @@ class TestModelInferenceEngine:
         assert event is None  # class 0 maps to None
 
     def test_infer_shadow_mode(self):
-        config = self.make_config(enabled=True, shadow_mode=True, confidence_threshold=0.1)
+        config = self.make_config(
+            enabled=True, shadow_mode=True, confidence_threshold=0.1
+        )
         engine = ModelInferenceEngine(config)
         # High-motion features to trigger fight detection
         for _ in range(config.sequence_length):

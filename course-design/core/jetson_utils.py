@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class JetsonInfo:
     """Jetson device information."""
+
     is_jetson: bool = False
     model: str = ""
     soc: str = ""  # System on Chip (e.g., Tegra X1, Xavier, Orin)
@@ -51,10 +52,10 @@ class JetsonManager:
 
     # Jetson SoC to CUDA architecture mapping
     JETSON_SOC_MAP: dict[str, str] = {
-        "tegra210": "5.3",   # Jetson Nano (Maxwell)
-        "tegra186": "6.2",   # Jetson TX2 (Pascal)
-        "tegra194": "7.2",   # Jetson Xavier (Volta)
-        "tegra234": "8.7",   # Jetson Orin (Ampere)
+        "tegra210": "5.3",  # Jetson Nano (Maxwell)
+        "tegra186": "6.2",  # Jetson TX2 (Pascal)
+        "tegra194": "7.2",  # Jetson Xavier (Volta)
+        "tegra234": "8.7",  # Jetson Orin (Ampere)
     }
 
     # Jetson model detection patterns
@@ -110,7 +111,7 @@ class JetsonManager:
             return info
 
         try:
-            with open(model_path, "r") as f:
+            with open(model_path) as f:
                 model_str = f.read().strip().rstrip("\x00")
         except Exception:
             return info
@@ -161,7 +162,7 @@ class JetsonManager:
     def _get_total_memory_mb(self) -> int:
         """Get total system memory in MB."""
         try:
-            with open("/proc/meminfo", "r") as f:
+            with open("/proc/meminfo") as f:
                 for line in f:
                     if line.startswith("MemTotal:"):
                         kb = int(line.split()[1])
@@ -244,7 +245,7 @@ class JetsonManager:
         try:
             # Try reading from apt list
             result = subprocess.run(
-                ["dpkg-query", "--showformat=${Version}', "--show", "nvidia-jetpack"],
+                ["dpkg-query", "--showformat=${Version}", "--show", "nvidia-jetpack"],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -256,7 +257,7 @@ class JetsonManager:
 
         # Alternative: check L4T version
         try:
-            with open("/etc/nv_tegra_release", "r") as f:
+            with open("/etc/nv_tegra_release") as f:
                 return f.read().strip()
         except Exception:
             pass
@@ -276,9 +277,9 @@ class JetsonManager:
                     if zone.startswith("thermal_zone"):
                         zone_path = os.path.join(thermal_path, zone)
                         try:
-                            with open(os.path.join(zone_path, "type"), "r") as f:
+                            with open(os.path.join(zone_path, "type")) as f:
                                 zone_type = f.read().strip()
-                            with open(os.path.join(zone_path, "temp"), "r") as f:
+                            with open(os.path.join(zone_path, "temp")) as f:
                                 temp_millidegrees = int(f.read().strip())
                                 temps[zone_type] = temp_millidegrees / 1000.0
                         except Exception:
@@ -331,7 +332,7 @@ def is_jetson() -> bool:
     if not os.path.exists(model_path):
         return False
     try:
-        with open(model_path, "r") as f:
+        with open(model_path) as f:
             model = f.read().lower()
         return "jetson" in model or "tegra" in model
     except Exception:

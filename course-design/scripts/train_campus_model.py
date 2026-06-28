@@ -31,9 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Train YOLO on campus safety dataset"
-    )
+    parser = argparse.ArgumentParser(description="Train YOLO on campus safety dataset")
     parser.add_argument(
         "--model",
         type=str,
@@ -190,9 +188,21 @@ def validate_base_model(model_path: str) -> bool:
 
     # Check if it's an official Ultralytics model that can be auto-downloaded
     official_models = [
-        "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt", "yolo11x.pt",
-        "yolo12n.pt", "yolo12s.pt", "yolo12m.pt", "yolo12l.pt", "yolo12x.pt",
-        "yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt",
+        "yolo11n.pt",
+        "yolo11s.pt",
+        "yolo11m.pt",
+        "yolo11l.pt",
+        "yolo11x.pt",
+        "yolo12n.pt",
+        "yolo12s.pt",
+        "yolo12m.pt",
+        "yolo12l.pt",
+        "yolo12x.pt",
+        "yolov8n.pt",
+        "yolov8s.pt",
+        "yolov8m.pt",
+        "yolov8l.pt",
+        "yolov8x.pt",
     ]
     if model_path in official_models:
         logger.info(f"Base model {model_path} will be auto-downloaded by Ultralytics")
@@ -278,7 +288,9 @@ def main() -> int:
         print("Training Complete!")
         print("=" * 60)
         print(f"Best mAP@50: {results.results_dict.get('metrics/mAP50(B)', 'N/A')}")
-        print(f"Best mAP@50-95: {results.results_dict.get('metrics/mAP50-95(B)', 'N/A')}")
+        print(
+            f"Best mAP@50-95: {results.results_dict.get('metrics/mAP50-95(B)', 'N/A')}"
+        )
         print(f"Results saved to: {args.project}/{args.name}")
         print("=" * 60)
 

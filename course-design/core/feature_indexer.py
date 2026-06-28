@@ -9,6 +9,7 @@ Chinese CLIP is preferred for Chinese-language queries.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from typing import Any
@@ -135,10 +136,8 @@ class FeatureIndexer:
         for c in candidates:
             cand_vec = None
             if c.get("feature_blob"):
-                try:
+                with contextlib.suppress(Exception):
                     cand_vec = np.frombuffer(c["feature_blob"], dtype=np.float32)
-                except Exception:
-                    pass
             if cand_vec is None and c.get("snapshot_path"):
                 cand_vec = self.encode_image(c["snapshot_path"])
             if cand_vec is not None:

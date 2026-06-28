@@ -11,12 +11,11 @@ Each rule is independently configurable via the YAML configuration.
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
 from typing import Any
 
 from .config import AppConfig
 from .constants import VEHICLE_CLASS_IDS, get_class_name
-from .geometry import bbox_aspect_h_over_w, point_in_polygon
+from .geometry import point_in_polygon
 from .models import Detection, Event
 
 
@@ -28,7 +27,10 @@ def _bbox_intersects_polygon(d: Detection, polygon: list[list[float]]) -> bool:
     reaching into zone while body center is outside).
     """
     corners = [
-        (d.x1, d.y1), (d.x2, d.y1), (d.x1, d.y2), (d.x2, d.y2),
+        (d.x1, d.y1),
+        (d.x2, d.y1),
+        (d.x1, d.y2),
+        (d.x2, d.y2),
         (d.cx, d.cy),
     ]
     return any(point_in_polygon(x, y, polygon) for x, y in corners)
@@ -168,7 +170,9 @@ class RulesEngine:
             events.extend(self._detect_fight(persons, timestamp_s, frame_index))
         if self.cfg.rules.vehicle.enabled:
             vehicles = [d for d in detections if d.class_id in VEHICLE_CLASS_IDS]
-            events.extend(self._detect_vehicle_intrusion(vehicles, timestamp_s, frame_index))
+            events.extend(
+                self._detect_vehicle_intrusion(vehicles, timestamp_s, frame_index)
+            )
 
         # Save untracked person detections for next frame's IOU matching
         self._prev_fallback_dets = [
@@ -254,7 +258,7 @@ class RulesEngine:
     ) -> list[Event]:
         events = []
         win = self.cfg.rules.fall.transition_window_s
-        confirm_frames = getattr(self.cfg.rules.fall, 'confirm_frames', 6)
+        confirm_frames = getattr(self.cfg.rules.fall, "confirm_frames", 6)
         for d in persons:
             tid = self._resolve_tid(d)
             hist = self._aspect_hist.get(tid)
@@ -301,8 +305,7 @@ class RulesEngine:
             recent = [(ts, asp) for ts, asp in hist if ts >= t_min]
             if len(recent) >= 2:
                 max_delta = max(
-                    abs(recent[k][1] - recent[k - 1][1])
-                    for k in range(1, len(recent))
+                    abs(recent[k][1] - recent[k - 1][1]) for k in range(1, len(recent))
                 )
                 if max_delta >= self.cfg.rules.fall.min_aspect_change_rate:
                     score += 1.5
@@ -317,20 +320,28 @@ class RulesEngine:
 
             # Signal 6: Pre-fall state awareness — was at least moderately
             # upright (aspect >= 1.0) recently? Catches sitting→lying falls.
-            pre_fall = any(
-                aspect >= 1.0
-                for ts, aspect in hist
-                if ts >= t_min
-            )
+            pre_fall = any(aspect >= 1.0 for ts, aspect in hist if ts >= t_min)
             if pre_fall and fallen_confirm:
                 score += 1.0
 
             # Threshold: 3.5+ triggers detection. Example passing combos:
             # upright(2) + fallen(2) = 4            classic standing fall
-            # fallen(2) + current(1.5) = 3.5        sustained horizontal
             # upright(2) + current(1.5) + drop(1) = 4.5  slow slide
-            # fallen(2) + pre_fall(1) + current(1.5) = 4.5  sitting→lying
-            if score >= 3.5:
+            #
+            # Two hard gates — a genuine fall is a TRANSITION from upright to
+            # horizontal and must END horizontal:
+            #   1. upright_seen — must have stood up in the window. Kills
+            #      static wide boxes (objects, someone already lying).
+            #   2. is_fallen_now — must currently be horizontal (or sustained
+            #      horizontal). Kills the case where a TALL, upright person's
+            #      box merely flickers in size (truncated / near-camera people
+            #      whose tracker box jitters), scoring upright(2)+transition(1.5)
+            #      = 3.5 without ever lying down.
+            is_fallen_now = (
+                current_aspect <= self.cfg.rules.fall.fallen_aspect_max
+                or fallen_confirm
+            )
+            if score >= 3.5 and upright_seen and is_fallen_now:
                 bbox = {"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2}
                 events.append(
                     self._make_event(
@@ -395,9 +406,10 @@ class RulesEngine:
             if self._crowd_start is None:
                 self._crowd_start = t
             elapsed = t - self._crowd_start
-            if elapsed >= self.cfg.rules.crowd.min_duration_s and (
-                t - self._crowd_last_emit
-            ) >= self.cfg.rules.crowd.debounce_s:
+            if (
+                elapsed >= self.cfg.rules.crowd.min_duration_s
+                and (t - self._crowd_last_emit) >= self.cfg.rules.crowd.debounce_s
+            ):
                 self._crowd_last_emit = t
                 self._crowd_start = None
                 events.append(
@@ -426,7 +438,10 @@ class RulesEngine:
                 elif inside:
                     # Already inside — check if min_duration_s has elapsed
                     start = self._intrusion_start.get(key)
-                    if start is not None and (t - start) >= self.cfg.rules.intrusion.min_duration_s:
+                    if (
+                        start is not None
+                        and (t - start) >= self.cfg.rules.intrusion.min_duration_s
+                    ):
                         last_emit = self._intrusion_last_emit.get(key, -1e18)
                         if (t - last_emit) >= self.cfg.rules.intrusion.debounce_s:
                             bbox = {"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2}
@@ -493,7 +508,10 @@ class RulesEngine:
                     score += 1
 
                 # Factor 5: Movement (weight=1) — high speed
-                if speed1 >= rule.movement_threshold or speed2 >= rule.movement_threshold:
+                if (
+                    speed1 >= rule.movement_threshold
+                    or speed2 >= rule.movement_threshold
+                ):
                     score += 1
 
                 if score >= rule.required_score:
@@ -547,11 +565,18 @@ class RulesEngine:
                     self._vehicle_start[key] = t
                 elif inside:
                     start = self._vehicle_start.get(key)
-                    if start is not None and (t - start) >= self.cfg.rules.vehicle.min_duration_s:
+                    if (
+                        start is not None
+                        and (t - start) >= self.cfg.rules.vehicle.min_duration_s
+                    ):
                         last_emit = self._vehicle_last_emit.get(key, -1e18)
                         if (t - last_emit) >= self.cfg.rules.vehicle.debounce_s:
                             bbox = {"x1": d.x1, "y1": d.y1, "x2": d.x2, "y2": d.y2}
-                            class_name = get_class_name(d.class_id) if d.class_id < 8 else "vehicle"
+                            class_name = (
+                                get_class_name(d.class_id)
+                                if d.class_id < 8
+                                else "vehicle"
+                            )
                             events.append(
                                 self._make_event(
                                     "vehicle_intrusion",
@@ -599,7 +624,7 @@ class RulesEngine:
             return 0.0
         mean = sum(speeds) / len(speeds)
         variance = sum((s - mean) ** 2 for s in speeds) / len(speeds)
-        return float(variance ** 0.5)
+        return float(variance**0.5)
 
     def _calc_pair_distance(self, tid1: int, tid2: int) -> float | None:
         """Return the distance between two track IDs in the previous frame."""

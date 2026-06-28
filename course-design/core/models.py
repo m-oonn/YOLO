@@ -48,6 +48,7 @@ class Detection:
     @property
     def name(self) -> str:
         from core.constants import get_class_name
+
         return get_class_name(self.class_id)
 
     @property

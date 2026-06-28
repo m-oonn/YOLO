@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -77,7 +77,9 @@ def main():
     if args.backend in ("tensorrt", "all"):
         onnx_path = os.path.join(args.output_dir, "onnx", f"{args.model}_vision.onnx")
         engine_path = os.path.join(
-            args.output_dir, "trt_engines", f"{args.model}_vision_{args.precision}.engine"
+            args.output_dir,
+            "trt_engines",
+            f"{args.model}_vision_{args.precision}.engine",
         )
         try:
             build_tensorrt_engine(

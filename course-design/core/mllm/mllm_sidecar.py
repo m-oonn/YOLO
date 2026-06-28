@@ -28,6 +28,7 @@ from core.mllm.scene_describer import (
     build_scene_prompt,
     normalize_scene_result,
     parse_json_response,
+    reconcile_with_detector,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,9 +60,27 @@ class MLLMSidecar:
         self._enhancer = AlarmEnhancer(config)
         self._frame_counter = 0
         self._last_scene_description: dict[str, Any] = {}
+        # Verdict callback: second-stage review calls this with the alarm id and
+        # the MLLM verdict so the alarm engine can confirm/dismiss the alarm.
+        # Signature: (alarm_id: int, verdict: str, confidence: float, reasoning: str)
+        self._verdict_callback = None
+        # Event-driven describe throttle: min frames between event-triggered
+        # descriptions, so a sustained alarm doesn't flood the inference worker.
+        self._last_event_describe_frame = -10_000
+        self._event_describe_min_gap = max(2, config.key_frame_interval // 2)
+        # Rolling memory of recent detector events (type -> last seen monotonic
+        # time, best confidence). The 2B VLM is slow (~10s) and cannot perceive
+        # fast/sparse events like fights from still frames, while the rule
+        # engine detects them reliably. So the detector is authoritative for the
+        # *displayed verdict*: this memory drives activity_type/risk on every
+        # frame, independent of when the slow model happens to run.
+        self._recent_events: dict[str, dict[str, float]] = {}
+        self._recent_event_ttl_s = 5.0
         self._running = False
         self._worker_thread: threading.Thread | None = None
-        self._task_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=DEFAULT_TASK_QUEUE_SIZE)
+        self._task_queue: queue.Queue[dict[str, Any]] = queue.Queue(
+            maxsize=DEFAULT_TASK_QUEUE_SIZE
+        )
         self._lock = threading.RLock()
         self._stats = {
             "frames_received": 0,
@@ -114,27 +133,124 @@ class MLLMSidecar:
         with self._lock:
             self._stats["frames_received"] += 1
 
-        self._buffer.add_frame(detections=detections, events=events, frame_data=None)
+        self._buffer.add_frame(detections=detections, events=events, frame_data=frame)
 
-        if self._frame_counter % self._config.key_frame_interval == 0:
+        # Record recent detector events and immediately reflect them in the
+        # displayed verdict (fast path, no model needed). This guarantees that
+        # whenever the rule engine fires a fight/fall, the UI shows it right
+        # away — even though the slow VLM may be mid-inference on another frame
+        # or describing a calm-looking frame.
+        now = time.monotonic()
+        if events:
+            for e in events:
+                etype = e.get("type", "")
+                conf = float(e.get("confidence", 0.0) or 0.0)
+                prev = self._recent_events.get(etype)
+                self._recent_events[etype] = {
+                    "ts": now,
+                    "conf": max(conf, prev["conf"]) if prev else conf,
+                }
+        self._apply_detector_verdict(now)
+
+        # Event-driven trigger: a periodic key-frame may miss sporadic alarm
+        # events (a fight lasts a few frames; the 5-frame window often has none
+        # by the time the 10th-frame tick fires). So also fire a description
+        # whenever this frame carries an alarm event, throttled to avoid
+        # flooding the worker. This guarantees the buffer holds the event when
+        # the scene is described, so detector reconciliation can apply.
+        has_event = bool(events)
+        periodic = self._frame_counter % self._config.key_frame_interval == 0
+        throttled_ok = (
+            self._frame_counter - self._last_event_describe_frame
+        ) >= self._event_describe_min_gap
+        event_trigger = has_event and throttled_ok
+
+        if periodic or event_trigger:
             should_describe = self._config.scene_description_enabled
             should_enhance = (
                 self._config.alarm_enhance_enabled and self._buffer.has_alarm_events()
             )
+            if event_trigger:
+                self._last_event_describe_frame = self._frame_counter
 
             if should_describe or should_enhance:
                 try:
-                    self._task_queue.put_nowait({
-                        "type": "process_key_frame",
-                        "frame": frame,
-                        "should_describe": should_describe,
-                        "should_enhance": should_enhance,
-                        "timestamp": time.time(),
-                    })
+                    self._task_queue.put_nowait(
+                        {
+                            "type": "process_key_frame",
+                            "frame": frame,
+                            "should_describe": should_describe,
+                            "should_enhance": should_enhance,
+                            "timestamp": time.time(),
+                        }
+                    )
                 except queue.Full:
                     with self._lock:
                         self._stats["queue_overflows"] += 1
                     logger.warning("MLLM task queue full, dropping frame")
+
+    # Detector event type -> (activity label, risk level), highest priority first.
+    _DETECTOR_VERDICTS = [
+        ("fight", "打架", "高"),
+        ("fall", "跌倒", "高"),
+        ("intrusion", "入侵", "高"),
+        ("running", "奔跑", "中"),
+        ("crowd", "聚集", "中"),
+    ]
+
+    def _apply_detector_verdict(self, now: float) -> None:
+        """Make the displayed scene verdict authoritative from the detector.
+
+        Expires stale events, then if any high-priority anomaly is still active
+        within the TTL window, force the displayed activity_type/risk_level to
+        match it. The VLM narrative (if any) is preserved as supplementary text.
+        Runs every frame and is cheap (no inference).
+        """
+        # Expire events older than the TTL.
+        expired = [
+            t
+            for t, v in self._recent_events.items()
+            if now - v["ts"] > self._recent_event_ttl_s
+        ]
+        for t in expired:
+            del self._recent_events[t]
+
+        # Pick the highest-priority active anomaly.
+        chosen = None
+        for etype, label, risk in self._DETECTOR_VERDICTS:
+            if etype in self._recent_events:
+                chosen = (label, risk, self._recent_events[etype]["conf"])
+                break
+
+        with self._lock:
+            if chosen is None:
+                return
+            label, risk, conf = chosen
+            scene = (
+                dict(self._last_scene_description)
+                if self._last_scene_description
+                else {}
+            )
+            # Keep any VLM-produced visual narrative as supplementary detail.
+            visual = (scene.get("narrative") or "").strip()
+            if visual.startswith("监控检测到"):
+                visual = ""  # already a detector-anchored line; avoid nesting
+            scene["activity_type"] = label
+            scene["risk_level"] = risk
+            scene["anomaly_detected"] = True
+            scene["anomaly_details"] = f"规则引擎以{conf:.0%}置信度检测到{label}行为"
+            scene["scene_summary"] = f"检测到{label}行为（置信度{conf:.0%}）"
+            scene["suggested_action"] = "立即核查现场并采取相应处置措施"
+            if visual:
+                scene["narrative"] = (
+                    f"监控检测到{label}行为（置信度{conf:.0%}）。画面补充：{visual}"
+                )
+            else:
+                scene["narrative"] = (
+                    f"监控检测到{label}行为（置信度{conf:.0%}），请立即核查现场。"
+                )
+            scene["reconciled_by_detector"] = True
+            self._last_scene_description = scene
 
     def _worker_loop(self) -> None:
         """Main worker loop with optimized task processing.
@@ -187,15 +303,84 @@ class MLLMSidecar:
             alarm_type = event.get("type", "unknown")
             if self._enhancer.should_enhance(alarm_type):
                 try:
-                    self._task_queue.put_nowait({
-                        "type": "enhance_alarm",
-                        "event": event,
-                        "timestamp": time.time(),
-                    })
+                    self._task_queue.put_nowait(
+                        {
+                            "type": "enhance_alarm",
+                            "event": event,
+                            "timestamp": time.time(),
+                        }
+                    )
                 except queue.Full:
                     logger.warning("MLLM task queue full, alarm enhancement dropped")
             enhanced.append(event)
         return enhanced
+
+    def set_verdict_callback(self, callback) -> None:
+        """Register the callback that applies an MLLM verdict to an alarm.
+
+        callback(alarm_id: int, verdict: str, confidence: float, reasoning: str)
+        """
+        self._verdict_callback = callback
+
+    def review_alarm(
+        self, alarm_id: int, event_type: str, alarm_details: str, frame
+    ) -> None:
+        """Queue a second-stage review for a freshly created (SUSPECTED) alarm.
+
+        This is the entry point of the cascade's second stage: the pipeline
+        hands us the alarm id + the frame that triggered it; the worker runs
+        the VLM verification and reports the verdict back via the callback.
+        """
+        if not self._config.enabled or not self._config.alarm_enhance_enabled:
+            return
+        if not self._enhancer.should_enhance(event_type):
+            return
+        try:
+            self._task_queue.put_nowait(
+                {
+                    "type": "review_alarm",
+                    "alarm_id": alarm_id,
+                    "event_type": event_type,
+                    "alarm_details": alarm_details,
+                    "frame": frame,
+                    "timestamp": time.time(),
+                }
+            )
+        except queue.Full:
+            with self._lock:
+                self._stats["queue_overflows"] += 1
+            logger.warning(
+                "MLLM task queue full, alarm review dropped (id=%s)", alarm_id
+            )
+
+    def _process_alarm_review(self, task: dict[str, Any]) -> None:
+        """Run VLM verification for one suspected alarm and apply the verdict."""
+        alarm_id = task.get("alarm_id")
+        event_type = task.get("event_type", "unknown")
+        alarm_details = task.get("alarm_details", "")
+        frame = task.get("frame")
+        context = self._buffer.get_context()
+        result = self._enhancer.enhance_alarm(
+            event_type,
+            alarm_details,
+            context,
+            lambda prompt: self._engine.generate(prompt, image=frame),
+        )
+        if not result:
+            return
+        with self._lock:
+            self._stats["alarms_enhanced"] += 1
+        # Join point: hand the verdict back to the alarm engine.
+        if self._verdict_callback is not None and alarm_id is not None:
+            try:
+                self._verdict_callback(
+                    alarm_id,
+                    result.get("verdict", "validate"),
+                    result.get("confidence", 0.0),
+                    result.get("reasoning", ""),
+                )
+            except Exception as e:
+                logger.warning("Verdict callback failed for alarm %s: %s", alarm_id, e)
 
     def _process_task(self, task: dict[str, Any]) -> None:
         """Process a single MLLM task with error handling.
@@ -208,6 +393,8 @@ class MLLMSidecar:
             self._process_key_frame(task)
         elif task_type == "enhance_alarm":
             self._process_alarm_enhancement(task)
+        elif task_type == "review_alarm":
+            self._process_alarm_review(task)
 
     def _process_key_frame(self, task: dict[str, Any]) -> None:
         """Process a key frame for scene description and alarm enhancement.
@@ -216,15 +403,44 @@ class MLLMSidecar:
             task: Task dictionary containing frame processing parameters.
         """
         context = self._buffer.get_context()
+        latest_frame = self._buffer.get_latest_frame()
+        image_for_vlm = latest_frame.frame_data if latest_frame else task.get("frame")
+        # Multi-frame sequence so the VLM can perceive motion (a fight looks
+        # like calm standing in a single still frame).
+        frames_for_vlm = self._buffer.get_recent_frames(n=3)
+        if not frames_for_vlm and image_for_vlm is not None:
+            frames_for_vlm = [image_for_vlm]
         if task.get("should_describe"):
             prompt = build_scene_prompt(context)
-            raw_text = self._engine.generate(prompt, image=None)
+            raw_text = self._engine.generate(prompt, images=frames_for_vlm)
             if raw_text:
                 parsed = parse_json_response(raw_text)
                 if parsed:
+                    result = normalize_scene_result(parsed)
+                    # Force agreement with the motion-aware detector so a
+                    # confident fight/fall isn't downgraded to "闲聊/正常".
+                    result = reconcile_with_detector(
+                        result, context.event_counts, context.event_confidences
+                    )
                     with self._lock:
-                        self._last_scene_description = normalize_scene_result(parsed)
+                        self._last_scene_description = result
                         self._stats["scenes_described"] += 1
+                else:
+                    # Preserve raw output even when JSON parsing fails
+                    with self._lock:
+                        self._last_scene_description = {
+                            "scene_summary": raw_text[:200],
+                            "activity_type": "unknown",
+                            "confidence": 0.0,
+                            "anomaly_detected": False,
+                            "anomaly_details": "",
+                            "risk_level": "低",
+                            "suggested_action": "",
+                            "narrative": raw_text,
+                            "raw_output": raw_text,
+                        }
+                        self._stats["scenes_described"] += 1
+                        self._stats["errors"] += 1
         if task.get("should_enhance"):
             for event in context.frames[-1].events if context.frames else []:
                 alarm_type = event.get("type", "unknown")
@@ -232,7 +448,7 @@ class MLLMSidecar:
                     alarm_type,
                     str(event),
                     context,
-                    self._engine.generate,
+                    lambda prompt: self._engine.generate(prompt, image=image_for_vlm),
                 )
                 if result:
                     with self._lock:
@@ -247,8 +463,13 @@ class MLLMSidecar:
         event = task.get("event", {})
         alarm_type = event.get("type", "unknown")
         context = self._buffer.get_context()
+        latest_frame = self._buffer.get_latest_frame()
+        image_for_vlm = latest_frame.frame_data if latest_frame else None
         result = self._enhancer.enhance_alarm(
-            alarm_type, str(event), context, self._engine.generate
+            alarm_type,
+            str(event),
+            context,
+            lambda prompt: self._engine.generate(prompt, image=image_for_vlm),
         )
         if result:
             with self._lock:
@@ -305,4 +526,8 @@ class MLLMSidecar:
     @property
     def is_running(self) -> bool:
         """Check if the sidecar worker is running."""
-        return self._running and self._worker_thread is not None and self._worker_thread.is_alive()
+        return (
+            self._running
+            and self._worker_thread is not None
+            and self._worker_thread.is_alive()
+        )

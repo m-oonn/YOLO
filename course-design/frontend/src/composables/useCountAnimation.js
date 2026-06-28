@@ -30,9 +30,13 @@ export function useCountAnimation(target, { duration = 1200, easing = true } = {
     rafId = requestAnimationFrame(tick)
   }
 
-  watch(target, (newVal) => {
-    animate(animatedValue.value, newVal)
-  }, { immediate: true })
+  watch(
+    target,
+    (newVal) => {
+      animate(animatedValue.value, newVal)
+    },
+    { immediate: true }
+  )
 
   onUnmounted(() => {
     if (rafId) cancelAnimationFrame(rafId)

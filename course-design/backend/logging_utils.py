@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import time
 import uuid
 from contextvars import ContextVar
@@ -42,10 +41,10 @@ class JSONFormatter(logging.Formatter):
             record_dict["exception"] = self.formatException(record.exc_info)
         if self._include_extra:
             extra = {
-                k: v for k, v in record.__dict__.items()
-                if k not in logging.LogRecord(
-                    "", 0, "", 0, "", (), None
-                ).__dict__ and not k.startswith("_")
+                k: v
+                for k, v in record.__dict__.items()
+                if k not in logging.LogRecord("", 0, "", 0, "", (), None).__dict__
+                and not k.startswith("_")
             }
             if extra:
                 record_dict["extra"] = extra

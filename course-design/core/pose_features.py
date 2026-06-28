@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 
@@ -23,34 +22,40 @@ class PerFrameFeatures:
     """Per-frame features extracted from a single skeleton."""
 
     track_id: int | None
-    torso_angle: float = 0.0        # torso inclination from vertical (degrees)
+    torso_angle: float = 0.0  # torso inclination from vertical (degrees)
     bone_angles: dict[str, float] = field(default_factory=dict)
-    center_x: float = 0.0            # body center x (normalized)
-    center_y: float = 0.0            # body center y (normalized)
-    head_height: float = 0.0         # nose y (normalized)
-    body_span: float = 0.0           # shoulder_width / height_ratio
+    center_x: float = 0.0  # body center x (normalized)
+    center_y: float = 0.0  # body center y (normalized)
+    head_height: float = 0.0  # nose y (normalized)
+    body_span: float = 0.0  # shoulder_width / height_ratio
     avg_kp_confidence: float = 0.0
-    valid_kp_ratio: float = 0.0      # fraction of valid keypoints
-    skeleton_quality: float = 0.0    # overall quality score
+    valid_kp_ratio: float = 0.0  # fraction of valid keypoints
+    skeleton_quality: float = 0.0  # overall quality score
 
     def to_vector(self) -> np.ndarray:
         """Convert to fixed-length feature vector (14-dim)."""
-        base = np.array([
-            self.torso_angle / 180.0,  # normalize to [0, 1]
-            self.center_x,
-            self.center_y,
-            self.head_height,
-            self.body_span,
-            self.avg_kp_confidence,
-            self.valid_kp_ratio,
-            self.skeleton_quality,
-        ])
+        base = np.array(
+            [
+                self.torso_angle / 180.0,  # normalize to [0, 1]
+                self.center_x,
+                self.center_y,
+                self.head_height,
+                self.body_span,
+                self.avg_kp_confidence,
+                self.valid_kp_ratio,
+                self.skeleton_quality,
+            ]
+        )
         # Add bone angles (up to 6)
-        bone_keys = ["left_elbow", "right_elbow", "left_knee",
-                      "right_knee", "left_hip_angle", "right_hip_angle"]
-        bone_vec = np.array([
-            self.bone_angles.get(k, 90.0) / 180.0 for k in bone_keys
-        ])
+        bone_keys = [
+            "left_elbow",
+            "right_elbow",
+            "left_knee",
+            "right_knee",
+            "left_hip_angle",
+            "right_hip_angle",
+        ]
+        bone_vec = np.array([self.bone_angles.get(k, 90.0) / 180.0 for k in bone_keys])
         return np.concatenate([base, bone_vec])  # 14-dim
 
 
@@ -58,21 +63,27 @@ class PerFrameFeatures:
 class TemporalFeatures:
     """Temporal features from a sliding window of skeleton history."""
 
-    velocities: np.ndarray = field(default_factory=lambda: np.zeros(NUM_SKELETON_KEYPOINTS * 2))
-    accelerations: np.ndarray = field(default_factory=lambda: np.zeros(NUM_SKELETON_KEYPOINTS * 2))
+    velocities: np.ndarray = field(
+        default_factory=lambda: np.zeros(NUM_SKELETON_KEYPOINTS * 2)
+    )
+    accelerations: np.ndarray = field(
+        default_factory=lambda: np.zeros(NUM_SKELETON_KEYPOINTS * 2)
+    )
     torso_angle_velocity: float = 0.0
     motion_energy: float = 0.0
     gait_frequency: float = 0.0
 
     def to_vector(self) -> np.ndarray:
         """Convert to feature vector (72-dim)."""
-        return np.concatenate([
-            self.velocities,        # 34-dim
-            self.accelerations,     # 34-dim
-            [self.torso_angle_velocity],
-            [self.motion_energy],
-            [self.gait_frequency],
-        ])
+        return np.concatenate(
+            [
+                self.velocities,  # 34-dim
+                self.accelerations,  # 34-dim
+                [self.torso_angle_velocity],
+                [self.motion_energy],
+                [self.gait_frequency],
+            ]
+        )
 
     def is_empty(self) -> bool:
         return bool(np.all(self.velocities == 0))
@@ -89,19 +100,23 @@ class InteractionFeatures:
     relative_speed: float = 0.0
 
     def to_vector(self) -> np.ndarray:
-        return np.array([
-            self.center_distance,
-            self.min_limb_distance,
-            self.orientation_diff / 180.0,
-            1.0 if self.contact_detected else 0.0,
-            self.relative_speed,
-        ])
+        return np.array(
+            [
+                self.center_distance,
+                self.min_limb_distance,
+                self.orientation_diff / 180.0,
+                1.0 if self.contact_detected else 0.0,
+                self.relative_speed,
+            ]
+        )
 
 
 class PerFrameFeatureExtractor:
     """Extracts per-frame features from skeleton data."""
 
-    def extract(self, skel: Skeleton, frame_w: int = 640, frame_h: int = 480) -> PerFrameFeatures:
+    def extract(
+        self, skel: Skeleton, frame_w: int = 640, frame_h: int = 480
+    ) -> PerFrameFeatures:
         """Compute per-frame features for a single skeleton."""
         kps = skel.keypoints
         valid_kps = [kp for kp in kps if kp.is_valid()]
@@ -121,7 +136,11 @@ class PerFrameFeatureExtractor:
             rs = kps[6]
             if ls.is_valid() and rs.is_valid():
                 sw = abs(rs.x - ls.x)
-                bbox_h = (skel.bbox["y2"] - skel.bbox["y1"]) if skel.bbox["y2"] > skel.bbox["y1"] else 1
+                bbox_h = (
+                    (skel.bbox["y2"] - skel.bbox["y1"])
+                    if skel.bbox["y2"] > skel.bbox["y1"]
+                    else 1
+                )
                 span = sw / bbox_h
 
         # Bone angles
@@ -154,8 +173,9 @@ class TemporalFeatureExtractor:
         # Per-track history: track_id -> deque of (timestamp, PerFrameFeatures)
         self._history: dict[int, deque[tuple[float, PerFrameFeatures]]] = {}
 
-    def extract(self, track_id: int, timestamp: float,
-                frame_features: PerFrameFeatures) -> TemporalFeatures:
+    def extract(
+        self, track_id: int, timestamp: float, frame_features: PerFrameFeatures
+    ) -> TemporalFeatures:
         """Compute temporal features from recent history."""
         if track_id not in self._history:
             self._history[track_id] = deque(maxlen=self.window_size)
@@ -173,9 +193,11 @@ class TemporalFeatureExtractor:
 
         vel_center_x = (curr_feat.center_x - prev_feat.center_x) / dt
         vel_center_y = (curr_feat.center_y - prev_feat.center_y) / dt
-        motion_energy = (vel_center_x ** 2 + vel_center_y ** 2) ** 0.5
+        motion_energy = (vel_center_x**2 + vel_center_y**2) ** 0.5
 
-        torso_vel = (curr_feat.torso_angle - prev_feat.torso_angle) / dt if dt > 0 else 0
+        torso_vel = (
+            (curr_feat.torso_angle - prev_feat.torso_angle) / dt if dt > 0 else 0
+        )
 
         # Approximate velocities for all keypoints
         velocities = np.zeros(NUM_SKELETON_KEYPOINTS * 2)
@@ -183,8 +205,12 @@ class TemporalFeatureExtractor:
 
         if len(hist) >= 3:
             _, prev2_feat = hist[-3]
-            vel_prev_x = (prev_feat.center_x - prev2_feat.center_x) / max(1e-6, prev_ts - hist[-3][0])
-            vel_prev_y = (prev_feat.center_y - prev2_feat.center_y) / max(1e-6, prev_ts - hist[-3][0])
+            vel_prev_x = (prev_feat.center_x - prev2_feat.center_x) / max(
+                1e-6, prev_ts - hist[-3][0]
+            )
+            vel_prev_y = (prev_feat.center_y - prev2_feat.center_y) / max(
+                1e-6, prev_ts - hist[-3][0]
+            )
             accel_x = (vel_center_x - vel_prev_x) / dt
             accel_y = (vel_center_y - vel_prev_y) / dt
             accelerations[0] = accel_x
@@ -201,7 +227,11 @@ class TemporalFeatureExtractor:
                 # Simple zero-crossing frequency estimate
                 centered = np.array(head_heights) - np.mean(head_heights)
                 zero_crossings = np.sum(np.abs(np.diff(np.signbit(centered))))
-                gait_freq = zero_crossings / (hist[-1][0] - hist[0][0]) if (hist[-1][0] - hist[0][0]) > 0 else 0
+                gait_freq = (
+                    zero_crossings / (hist[-1][0] - hist[0][0])
+                    if (hist[-1][0] - hist[0][0]) > 0
+                    else 0
+                )
 
         return TemporalFeatures(
             velocities=velocities,
@@ -225,8 +255,9 @@ class InteractionFeatureExtractor:
     """Extracts pairwise interaction features between skeletons."""
 
     @staticmethod
-    def extract(skel_a: Skeleton, skel_b: Skeleton,
-                frame_w: int = 640, frame_h: int = 480) -> InteractionFeatures:
+    def extract(
+        skel_a: Skeleton, skel_b: Skeleton, frame_w: int = 640, frame_h: int = 480
+    ) -> InteractionFeatures:
         """Compute interaction features between two skeletons."""
         cx_a, cy_a = skel_a.center
         cx_b, cy_b = skel_b.center
@@ -235,27 +266,36 @@ class InteractionFeatureExtractor:
         # Minimum limb distance
         min_limb_dist = float("inf")
         limb_indices = [
-            (7, 9),   # left arm
+            (7, 9),  # left arm
             (8, 10),  # right arm
-            (5, 7),   # left upper arm
-            (6, 8),   # right upper arm
+            (5, 7),  # left upper arm
+            (6, 8),  # right upper arm
         ]
         for i, j in limb_indices:
-            if (i < len(skel_a.keypoints) and j < len(skel_a.keypoints)
-                    and i < len(skel_b.keypoints) and j < len(skel_b.keypoints)):
-                if (skel_a.keypoints[i].is_valid() and skel_a.keypoints[j].is_valid()
-                        and skel_b.keypoints[i].is_valid() and skel_b.keypoints[j].is_valid()):
-                    p1 = np.array([skel_a.keypoints[i].x, skel_a.keypoints[i].y])
-                    p2 = np.array([skel_a.keypoints[j].x, skel_a.keypoints[j].y])
-                    p3 = np.array([skel_b.keypoints[i].x, skel_b.keypoints[i].y])
-                    p4 = np.array([skel_b.keypoints[j].x, skel_b.keypoints[j].y])
-                    d = np.min([
+            if (
+                i < len(skel_a.keypoints)
+                and j < len(skel_a.keypoints)
+                and i < len(skel_b.keypoints)
+                and j < len(skel_b.keypoints)
+            ) and (
+                skel_a.keypoints[i].is_valid()
+                and skel_a.keypoints[j].is_valid()
+                and skel_b.keypoints[i].is_valid()
+                and skel_b.keypoints[j].is_valid()
+            ):
+                p1 = np.array([skel_a.keypoints[i].x, skel_a.keypoints[i].y])
+                p2 = np.array([skel_a.keypoints[j].x, skel_a.keypoints[j].y])
+                p3 = np.array([skel_b.keypoints[i].x, skel_b.keypoints[i].y])
+                p4 = np.array([skel_b.keypoints[j].x, skel_b.keypoints[j].y])
+                d = np.min(
+                    [
                         np.linalg.norm(p1 - p3),
                         np.linalg.norm(p1 - p4),
                         np.linalg.norm(p2 - p3),
                         np.linalg.norm(p2 - p4),
-                    ])
-                    min_limb_dist = min(min_limb_dist, d)
+                    ]
+                )
+                min_limb_dist = min(min_limb_dist, d)
 
         if min_limb_dist == float("inf"):
             min_limb_dist = center_dist
@@ -280,6 +320,7 @@ class InteractionFeatureExtractor:
 def normalize_features(features: PerFrameFeatures) -> PerFrameFeatures:
     """Ensure feature values are in reasonable ranges (returns new instance)."""
     return PerFrameFeatures(
+        track_id=features.track_id,
         torso_angle=max(0.0, min(180.0, features.torso_angle)),
         center_x=max(0.0, min(1.0, features.center_x)),
         center_y=max(0.0, min(1.0, features.center_y)),

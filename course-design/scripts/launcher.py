@@ -14,28 +14,29 @@ This module provides a one-click startup experience with:
 
 from __future__ import annotations
 
+import argparse
+import http.client
+import logging
 import os
-import sys
-import time
 import socket
 import subprocess
-import argparse
-import logging
+import sys
 import threading
-import http.client
+import time
 from pathlib import Path
-from typing import Optional
 
 COURSE_DIR = Path(__file__).resolve().parent.parent
 if str(COURSE_DIR) not in sys.path:
     sys.path.insert(0, str(COURSE_DIR))
 
+import contextlib
+
 from scripts.startup_config import (
     StartupOptions,
-    get_default_options,
-    load_from_env,
     detect_platform,
+    get_default_options,
     get_platform_config,
+    load_from_env,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 class Colors:
     """ANSI color codes for terminal output."""
+
     HEADER = "\033[95m"
     BLUE = "\033[94m"
     CYAN = "\033[96m"
@@ -71,7 +73,9 @@ def print_header(text: str):
 
 def print_step(step: str, status: str = "..."):
     """Print a startup step."""
-    print(f"  [{Colors.BLUE}STEP{Colors.ENDC}] {step:<40} {status}", end="\r", flush=True)
+    print(
+        f"  [{Colors.BLUE}STEP{Colors.ENDC}] {step:<40} {status}", end="\r", flush=True
+    )
 
 
 def print_status(text: str, success: bool = True):
@@ -84,7 +88,7 @@ def print_status(text: str, success: bool = True):
 class SystemChecker:
     """Perform pre-flight system checks."""
 
-    _torch_cache: Optional[bool] = None  # class-level GPU availability cache
+    _torch_cache: bool | None = None  # class-level GPU availability cache
 
     def __init__(self, options: StartupOptions):
         self.options = options
@@ -97,8 +101,12 @@ class SystemChecker:
         print_step("Checking Python version")
         version = sys.version_info
         if version.major < 3 or (version.major == 3 and version.minor < 10):
-            self.errors.append(f"Python 3.10+ required, found {version.major}.{version.minor}")
-            print_status(f"Python {version.major}.{version.minor}.{version.micro}", False)
+            self.errors.append(
+                f"Python 3.10+ required, found {version.major}.{version.minor}"
+            )
+            print_status(
+                f"Python {version.major}.{version.minor}.{version.micro}", False
+            )
             return False
         print_status(f"Python {version.major}.{version.minor}.{version.micro}")
         return True
@@ -140,7 +148,10 @@ class SystemChecker:
 
         if missing:
             print_status(f"Missing ML packages: {', '.join(missing)}", False)
-            color_print("  Detection and GPU features may not work. Install with: pip install -r requirements.txt", Colors.YELLOW)
+            color_print(
+                "  Detection and GPU features may not work. Install with: pip install -r requirements.txt",
+                Colors.YELLOW,
+            )
             return False
         print_status("ML packages OK")
         return True
@@ -189,11 +200,12 @@ class SystemChecker:
         print_step("Checking GPU availability")
         try:
             import torch
+
             if torch.cuda.is_available():
                 gpu_name = torch.cuda.get_device_name(0)
                 gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1024**3
                 print_status(f"GPU: {gpu_name} ({gpu_mem:.1f} GB)")
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 print_status("Using Apple MPS GPU")
             else:
                 print_status("No GPU found, using CPU")
@@ -217,6 +229,7 @@ class SystemChecker:
 
         try:
             from backend.camera_utils import quick_camera_check
+
             available, message = quick_camera_check(0, timeout_sec=5.0)
             if available:
                 print_status("Camera accessible")
@@ -227,9 +240,17 @@ class SystemChecker:
                 color_print(f"    {message}", Colors.YELLOW)
                 color_print("  Windows camera troubleshooting:", Colors.YELLOW)
                 color_print("    1. 检查摄像头是否已连接并安装驱动", Colors.YELLOW)
-                color_print("    2. Windows 设置 > 隐私和安全性 > 摄像头 -- 确保已开启", Colors.YELLOW)
-                color_print("    3. 关闭其他占用摄像头的程序 (Teams, Zoom, 浏览器等)", Colors.YELLOW)
-                color_print("    4. 设备管理器 (devmgmt.msc) 检查摄像头设备状态", Colors.YELLOW)
+                color_print(
+                    "    2. Windows 设置 > 隐私和安全性 > 摄像头 -- 确保已开启",
+                    Colors.YELLOW,
+                )
+                color_print(
+                    "    3. 关闭其他占用摄像头的程序 (Teams, Zoom, 浏览器等)",
+                    Colors.YELLOW,
+                )
+                color_print(
+                    "    4. 设备管理器 (devmgmt.msc) 检查摄像头设备状态", Colors.YELLOW
+                )
                 return True  # Don't block startup, just warn
         except ImportError:
             print_status("Skipped (camera_utils not yet loaded)", False)
@@ -264,9 +285,15 @@ class SystemChecker:
             checks.append(self.check_camera)
 
         if self.options.check_ports:
-            checks.append(lambda: self.check_port_available(self.options.backend.port, "Backend"))
+            checks.append(
+                lambda: self.check_port_available(self.options.backend.port, "Backend")
+            )
             if self.options.frontend.enabled:
-                checks.append(lambda: self.check_port_available(self.options.frontend.port, "Frontend"))
+                checks.append(
+                    lambda: self.check_port_available(
+                        self.options.frontend.port, "Frontend"
+                    )
+                )
 
         checks.append(lambda: self.check_model_file(self.options.backend.model_path))
 
@@ -301,6 +328,7 @@ class ServiceManager:
     def _is_port_free(self, port: int) -> bool:
         """Check if a TCP port is available for binding."""
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             sock.bind(("", port))
@@ -321,21 +349,28 @@ class ServiceManager:
                 # Try PowerShell Get-NetTCPConnection first (modern Windows)
                 try:
                     ps_cmd = [
-                        "powershell.exe", "-Command",
+                        "powershell.exe",
+                        "-Command",
                         f"Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | "
-                        f"Select-Object -ExpandProperty OwningProcess"
+                        f"Select-Object -ExpandProperty OwningProcess",
                     ]
                     result = subprocess.run(
-                        ps_cmd, capture_output=True, text=True, timeout=5,
+                        ps_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
                     )
                     if result.stdout.strip():
                         for pid in result.stdout.strip().splitlines():
                             pid = pid.strip()
                             if pid:
-                                logger.info("Killing process PID %s holding port %s", pid, port)
+                                logger.info(
+                                    "Killing process PID %s holding port %s", pid, port
+                                )
                                 subprocess.run(
                                     ["taskkill", "/F", "/PID", pid],
-                                    capture_output=True, timeout=5,
+                                    capture_output=True,
+                                    timeout=5,
                                 )
                                 killed = True
                 except Exception:
@@ -344,17 +379,28 @@ class ServiceManager:
                 if not killed:
                     try:
                         result = subprocess.run(
-                            ["netstat", "-ano"], capture_output=True, text=True, timeout=5,
-                            encoding="gbk", errors="ignore"
+                            ["netstat", "-ano"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                            encoding="gbk",
+                            errors="ignore",
                         )
                         for line in result.stdout.splitlines():
                             parts = line.strip().split()
-                            if len(parts) >= 5 and f":{port}" in parts[1] and "LISTENING" in parts:
+                            if (
+                                len(parts) >= 5
+                                and f":{port}" in parts[1]
+                                and "LISTENING" in parts
+                            ):
                                 pid = parts[4]
-                                logger.info("Killing process PID %s holding port %s", pid, port)
+                                logger.info(
+                                    "Killing process PID %s holding port %s", pid, port
+                                )
                                 subprocess.run(
                                     ["taskkill", "/F", "/PID", pid],
-                                    capture_output=True, timeout=5,
+                                    capture_output=True,
+                                    timeout=5,
                                 )
                                 killed = True
                     except FileNotFoundError:
@@ -363,7 +409,9 @@ class ServiceManager:
                 if self._is_port_free(port):
                     print_status(f"Freed port {port}")
                     return
-                print_status(f"Could not free port {port} (no process identified)", False)
+                print_status(
+                    f"Could not free port {port} (no process identified)", False
+                )
             else:
                 # Unix-like: try lsof, then fuser
                 for cmd_template in [["lsof", "-ti", ":{port}"]]:
@@ -400,10 +448,14 @@ class ServiceManager:
             "-m",
             "uvicorn",
             "backend.main:app",
-            "--host", self.options.backend.host,
-            "--port", str(self.options.backend.port),
-            "--workers", str(self.options.backend.workers),
-            "--log-level", self.options.backend.log_level,
+            "--host",
+            self.options.backend.host,
+            "--port",
+            str(self.options.backend.port),
+            "--workers",
+            str(self.options.backend.workers),
+            "--log-level",
+            self.options.backend.log_level,
         ]
 
         try:
@@ -413,7 +465,11 @@ class ServiceManager:
                     cwd=str(COURSE_DIR),
                     stdout=log,
                     stderr=subprocess.STDOUT,
-                    env={**os.environ, "PYTHONPATH": str(COURSE_DIR), "YOLO_DEVICE": self.options.backend.device},
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": str(COURSE_DIR),
+                        "YOLO_DEVICE": self.options.backend.device,
+                    },
                 )
 
             self.processes["backend"] = process
@@ -444,6 +500,7 @@ class ServiceManager:
 
             try:
                 import urllib.request
+
                 with urllib.request.urlopen(url, timeout=2) as response:
                     if response.status == 200:
                         # Verify OUR process is healthy, not a stale one
@@ -453,10 +510,20 @@ class ServiceManager:
                         elapsed = time.time() - self.startup_time["backend"]
                         print_status(f"Backend ready ({elapsed:.1f}s)")
                         return True
-            except (urllib.error.URLError, socket.timeout, ConnectionRefusedError, ConnectionResetError, http.client.RemoteDisconnected):
+            except (
+                TimeoutError,
+                urllib.error.URLError,
+                ConnectionRefusedError,
+                ConnectionResetError,
+                http.client.RemoteDisconnected,
+            ):
                 pass
 
-            print(f"\r  [WAIT] Backend starting {spinner[idx]} ({time.time() - start:.0f}s)", end="", flush=True)
+            print(
+                f"\r  [WAIT] Backend starting {spinner[idx]} ({time.time() - start:.0f}s)",
+                end="",
+                flush=True,
+            )
             idx = (idx + 1) % 4
             time.sleep(interval)
             interval = min(interval * 1.5, 1.0)
@@ -476,6 +543,7 @@ class ServiceManager:
 
         # Find npm executable
         import shutil
+
         npm_cmd = shutil.which("npm")
         # Fallback: search in common node installation paths and frontend node_modules
         if not npm_cmd:
@@ -524,7 +592,13 @@ class ServiceManager:
                     log_file = COURSE_DIR / "outputs" / "frontend.log"
                     with open(log_file, "w") as log:
                         process = subprocess.Popen(
-                            [vite_cmd, "--host", self.options.frontend.host, "--port", str(self.options.frontend.port)],
+                            [
+                                vite_cmd,
+                                "--host",
+                                self.options.frontend.host,
+                                "--port",
+                                str(self.options.frontend.port),
+                            ],
                             cwd=str(frontend_dir),
                             stdout=log,
                             stderr=subprocess.STDOUT,
@@ -558,8 +632,10 @@ class ServiceManager:
             "run",
             "dev" if self.options.frontend.dev_mode else "preview",
             "--",
-            "--host", self.options.frontend.host,
-            "--port", str(self.options.frontend.port),
+            "--host",
+            self.options.frontend.host,
+            "--port",
+            str(self.options.frontend.port),
         ]
 
         try:
@@ -599,19 +675,24 @@ class ServiceManager:
                 print_status("Frontend process died", False)
                 return False
 
-            # Try to connect
+            # Primary check: a raw TCP connect proves the dev server is
+            # listening. This is more reliable than an HTTP request because
+            # Vite may return non-200 or stall during initial warmup compile.
             try:
-                import urllib.request
-                url = f"http://127.0.0.1:{self.options.frontend.port}"
-                with urllib.request.urlopen(url, timeout=2) as response:
-                    if response.status == 200:
-                        elapsed = time.time() - self.startup_time["frontend"]
-                        print_status(f"Frontend ready ({elapsed:.1f}s)")
-                        return True
-            except (urllib.error.URLError, socket.timeout, ConnectionRefusedError, ConnectionResetError, http.client.RemoteDisconnected):
+                with socket.create_connection(
+                    ("127.0.0.1", self.options.frontend.port), timeout=2
+                ):
+                    elapsed = time.time() - self.startup_time["frontend"]
+                    print_status(f"Frontend ready ({elapsed:.1f}s)")
+                    return True
+            except (TimeoutError, ConnectionRefusedError, OSError):
                 pass
 
-            print(f"\r  [WAIT] Frontend starting {spinner[idx]} ({time.time() - start:.0f}s)", end="", flush=True)
+            print(
+                f"\r  [WAIT] Frontend starting {spinner[idx]} ({time.time() - start:.0f}s)",
+                end="",
+                flush=True,
+            )
             idx = (idx + 1) % 4
             time.sleep(interval)
             interval = min(interval * 1.5, 2.0)
@@ -689,7 +770,9 @@ def run_startup(options: StartupOptions) -> int:
     def _start_backend():
         nonlocal backend_ok
         if manager.start_backend():
-            backend_ok = manager.wait_for_backend_healthy(timeout=options.startup_timeout)
+            backend_ok = manager.wait_for_backend_healthy(
+                timeout=options.startup_timeout
+            )
         if not backend_ok:
             color_print("\nBackend failed to start. Check logs:", Colors.RED)
             print(f"  {COURSE_DIR / 'outputs' / 'backend.log'}")
@@ -698,17 +781,17 @@ def run_startup(options: StartupOptions) -> int:
         nonlocal frontend_ok
         if options.frontend.enabled:
             if manager.start_frontend():
-                frontend_ok = manager.wait_for_frontend_healthy(timeout=options.startup_timeout * 2)
+                frontend_ok = manager.wait_for_frontend_healthy(
+                    timeout=options.startup_timeout * 2
+                )
             if not frontend_ok:
                 color_print("\nFrontend failed to start. Check logs:", Colors.RED)
                 print(f"  {COURSE_DIR / 'outputs' / 'frontend.log'}")
 
     # Run slow dependency checks in background thread (non-blocking)
     def _slow_checks():
-        try:
+        with contextlib.suppress(Exception):
             checker.run_slow_checks()
-        except Exception:
-            pass
 
     slow_check_thread = threading.Thread(target=_slow_checks, daemon=True)
     slow_check_thread.start()
@@ -744,7 +827,9 @@ def run_startup(options: StartupOptions) -> int:
         print(f"  Frontend UI:  http://localhost:{options.frontend.port}")
     print(f"  API Docs:     http://localhost:{options.backend.port}/docs")
     print()
-    print(f"  Startup phases: preflight={phases['preflight']:.1f}s, services={phases['services']:.1f}s, total={phases['total']:.1f}s")
+    print(
+        f"  Startup phases: preflight={phases['preflight']:.1f}s, services={phases['services']:.1f}s, total={phases['total']:.1f}s"
+    )
     print()
     color_print("Press Ctrl+C to stop the system.", Colors.YELLOW)
     print()
@@ -779,17 +864,15 @@ Examples:
   %(prog)s --port 9000        # Use custom backend port
   %(prog)s --no-browser      # Don't open browser automatically
   %(prog)s --skip-checks     # Skip pre-flight system checks
-        """
+        """,
     )
 
     parser.add_argument(
         "--backend-only",
         action="store_true",
-        help="Start only backend service (no frontend)"
+        help="Start only backend service (no frontend)",
     )
-    parser.add_argument(
-        "--port", type=int, help="Backend port (default: 8000)"
-    )
+    parser.add_argument("--port", type=int, help="Backend port (default: 8000)")
     parser.add_argument(
         "--frontend-port", type=int, help="Frontend port (default: 8080)"
     )
@@ -797,20 +880,20 @@ Examples:
         "--model", type=str, help="Model path (default: models/yolov11n.pt)"
     )
     parser.add_argument(
-        "--device", type=str, choices=["auto", "cpu", "cuda"], default="auto",
-        help="Device to use for inference (default: auto)"
+        "--device",
+        type=str,
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Device to use for inference (default: auto)",
     )
     parser.add_argument(
-        "--no-browser", action="store_true",
-        help="Don't open browser automatically"
+        "--no-browser", action="store_true", help="Don't open browser automatically"
     )
     parser.add_argument(
-        "--skip-checks", action="store_true",
-        help="Skip pre-flight system checks"
+        "--skip-checks", action="store_true", help="Skip pre-flight system checks"
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true",
-        help="Enable verbose output"
+        "--verbose", "-v", action="store_true", help="Enable verbose output"
     )
 
     args = parser.parse_args()

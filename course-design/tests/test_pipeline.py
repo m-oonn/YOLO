@@ -27,6 +27,8 @@ from core.pipeline import DetectionPipeline
 def config():
     return AppConfig(
         model_path="dummy.pt",
+        fall_model_path="",
+        fight_model_path="",
         rules=RulesConfig(
             running=RunningRule(enabled=True, speed_px_s=50),
             fall=FallRule(enabled=True),

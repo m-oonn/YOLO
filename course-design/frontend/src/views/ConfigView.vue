@@ -15,8 +15,18 @@
           <div class="card-header">
             <div class="header-title-group">
               <span class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: -2px"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
                 检测规则
               </span>
@@ -25,13 +35,23 @@
               size="small"
               type="primary"
               :action="saveRules"
-              successMessage="规则已保存"
-              errorMessage="保存失败"
+              success-message="规则已保存"
+              error-message="保存失败"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <polyline points="17 21 17 13 7 13 7 21"/>
-                <polyline points="7 3 7 8 15 8"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-right: 4px; vertical-align: -2px"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
               </svg>
               保存
             </ActionButton>
@@ -54,7 +74,9 @@
                 show-stops
                 class="rule-slider"
               />
-              <span v-if="rule.threshold !== undefined" class="rule-value">{{ (rule.threshold * 100).toFixed(0) }}%</span>
+              <span v-if="rule.threshold !== undefined" class="rule-value">
+                {{ (rule.threshold * 100).toFixed(0) }}%
+              </span>
             </div>
           </div>
         </div>
@@ -66,18 +88,38 @@
           <div class="card-header">
             <div class="header-title-group">
               <span class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="3" y1="9" x2="21" y2="9"/>
-                  <line x1="9" y1="21" x2="9" y2="9"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: -2px"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="3" y1="9" x2="21" y2="9" />
+                  <line x1="9" y1="21" x2="9" y2="9" />
                 </svg>
                 检测区域
               </span>
             </div>
             <el-button size="small" type="primary" @click="showZoneDialog = true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-right: 4px; vertical-align: -2px"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               添加区域
             </el-button>
@@ -85,10 +127,19 @@
         </template>
         <div v-if="zones.length === 0" class="empty-state">
           <div class="empty-icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-disabled)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <line x1="3" y1="9" x2="21" y2="9"/>
-              <line x1="9" y1="21" x2="9" y2="9"/>
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--text-disabled)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="9" y1="21" x2="9" y2="9" />
             </svg>
           </div>
           <p class="empty-title">暂无检测区域</p>
@@ -107,9 +158,13 @@
                 type="danger"
                 text
                 :action="() => deleteZone(idx)"
-                :confirmConfig="{ title: '确认删除', message: `确定要删除区域「${zone.name}」吗？`, type: 'warning' }"
-                successMessage="区域已删除"
-                errorMessage="删除失败"
+                :confirm-config="{
+                  title: '确认删除',
+                  message: `确定要删除区域「${zone.name}」吗？`,
+                  type: 'warning',
+                }"
+                success-message="区域已删除"
+                error-message="删除失败"
               >
                 删除
               </ActionButton>
@@ -124,9 +179,21 @@
           <div class="card-header">
             <div class="header-title-group">
               <span class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: -2px"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  />
                 </svg>
                 系统设置
               </span>
@@ -135,13 +202,23 @@
               size="small"
               type="primary"
               :action="saveSettings"
-              successMessage="设置已保存"
-              errorMessage="保存失败"
+              success-message="设置已保存"
+              error-message="保存失败"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <polyline points="17 21 17 13 7 13 7 21"/>
-                <polyline points="7 3 7 8 15 8"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-right: 4px; vertical-align: -2px"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
               </svg>
               保存
             </ActionButton>
@@ -154,7 +231,14 @@
               <span class="setting-desc">低于此值的检测结果将被忽略</span>
             </div>
             <div class="setting-control">
-              <el-slider v-model="settings.confidence" :min="0" :max="1" :step="0.05" show-stops class="setting-slider" />
+              <el-slider
+                v-model="settings.confidence"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                show-stops
+                class="setting-slider"
+              />
               <span class="setting-value">{{ (settings.confidence * 100).toFixed(0) }}%</span>
             </div>
           </div>
@@ -164,7 +248,14 @@
               <span class="setting-desc">非极大值抑制的 IoU 阈值</span>
             </div>
             <div class="setting-control">
-              <el-slider v-model="settings.iou" :min="0" :max="1" :step="0.05" show-stops class="setting-slider" />
+              <el-slider
+                v-model="settings.iou"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                show-stops
+                class="setting-slider"
+              />
               <span class="setting-value">{{ (settings.iou * 100).toFixed(0) }}%</span>
             </div>
           </div>
@@ -204,8 +295,18 @@
           <div class="card-header">
             <div class="header-title-group">
               <span class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -2px;">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="margin-right: 6px; vertical-align: -2px"
+                >
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
                 MLLM 场景理解
               </span>
@@ -214,13 +315,23 @@
               size="small"
               type="primary"
               :action="saveMllmSettings"
-              successMessage="MLLM 设置已保存"
-              errorMessage="保存失败"
+              success-message="MLLM 设置已保存"
+              error-message="保存失败"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <polyline points="17 21 17 13 7 13 7 21"/>
-                <polyline points="7 3 7 8 15 8"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-right: 4px; vertical-align: -2px"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
               </svg>
               保存
             </ActionButton>
@@ -281,19 +392,52 @@
         <el-form-item label="坐标">
           <div class="coord-editor">
             <div v-for="(pt, i) in zonePoints" :key="i" class="coord-row">
-              <el-input-number v-model="pt.x" :min="0" :precision="0" size="small" placeholder="X" class="coord-input" />
-              <el-input-number v-model="pt.y" :min="0" :precision="0" size="small" placeholder="Y" class="coord-input" />
+              <el-input-number
+                v-model="pt.x"
+                :min="0"
+                :precision="0"
+                size="small"
+                placeholder="X"
+                class="coord-input"
+              />
+              <el-input-number
+                v-model="pt.y"
+                :min="0"
+                :precision="0"
+                size="small"
+                placeholder="Y"
+                class="coord-input"
+              />
               <el-button size="small" text type="danger" @click="removePoint(i)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </el-button>
             </div>
-            <el-button size="small" text type="primary" @click="addPoint" class="add-point-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -2px;">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
+            <el-button size="small" text type="primary" class="add-point-btn" @click="addPoint">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-right: 4px; vertical-align: -2px"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               添加坐标点
             </el-button>
@@ -322,15 +466,26 @@ import ActionButton from '../components/ActionButton.vue'
 
 const rules = ref({})
 const zones = ref([])
-const settings = ref({ confidence: 0.5, iou: 0.45, frame_skip: 1, save_snapshots: true, record_video: false })
+const settings = ref({
+  confidence: 0.5,
+  iou: 0.45,
+  frame_skip: 1,
+  save_snapshots: true,
+  record_video: false,
+})
 const mllmSettings = ref({ enabled: false, interval: 30, enhance_alarms: true })
 const showZoneDialog = ref(false)
 const editingZoneIndex = ref(null)
 const zoneForm = ref({ name: '', type: 'forbidden', coordinates: '' })
-const zonePoints = ref([{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 200 }, { x: 100, y: 200 }])
+const zonePoints = ref([
+  { x: 100, y: 100 },
+  { x: 200, y: 100 },
+  { x: 200, y: 200 },
+  { x: 100, y: 200 },
+])
 
 const coordPreview = computed(() => {
-  return JSON.stringify(zonePoints.value.map(p => [p.x, p.y]))
+  return JSON.stringify(zonePoints.value.map((p) => [p.x, p.y]))
 })
 
 const addPoint = () => {
@@ -349,7 +504,12 @@ watch(showZoneDialog, (visible) => {
   if (!visible) {
     editingZoneIndex.value = null
     zoneForm.value = { name: '', type: 'forbidden', coordinates: '' }
-    zonePoints.value = [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 200 }, { x: 100, y: 200 }]
+    zonePoints.value = [
+      { x: 100, y: 100 },
+      { x: 200, y: 100 },
+      { x: 200, y: 200 },
+      { x: 100, y: 200 },
+    ]
   }
 })
 
@@ -387,7 +547,7 @@ const loadConfig = async () => {
     const res = await configAPI.get()
     const cfg = res.config || res
     rules.value = cfg.rules || {}
-    zones.value = cfg.zones || []
+    zones.value = cfg.rules?.intrusion?.zones || []
     settings.value = { ...settings.value, ...cfg.settings }
   } catch (e) {
     logger.error('Failed to load config:', e)
@@ -445,7 +605,7 @@ const saveZone = async () => {
       ElMessage.warning('区域至少需要 3 个坐标点')
       return
     }
-    const coords = zonePoints.value.map(p => [p.x, p.y])
+    const coords = zonePoints.value.map((p) => [p.x, p.y])
     const zone = {
       name: zoneForm.value.name,
       type: zoneForm.value.type,

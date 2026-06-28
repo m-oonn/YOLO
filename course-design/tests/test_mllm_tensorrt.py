@@ -10,13 +10,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ── Archives API ────────────────────────────────────────────────
+
 
 class TestArchivesAPI:
     def test_list_empty_when_no_pipeline(self):
         with patch("backend.api.archives._get_recorder", return_value=None):
             from backend.api.archives import list_clips
+
             result = list_clips()
             assert result.total == 0
 
@@ -26,8 +27,11 @@ class TestArchivesAPI:
         mock.get_clip_count.return_value = 0
         with patch("backend.api.archives._get_recorder", return_value=mock):
             from backend.api.archives import list_clips
+
             result = list_clips(event_type="fall", limit=10, offset=5)
-            mock.get_clips.assert_called_once_with(event_type="fall", limit=10, offset=5)
+            mock.get_clips.assert_called_once_with(
+                event_type="fall", limit=10, offset=5
+            )
             assert result.total == 0
 
     def test_delete_success(self):
@@ -35,46 +39,61 @@ class TestArchivesAPI:
         mock.delete_clip.return_value = True
         with patch("backend.api.archives._get_recorder", return_value=mock):
             from backend.api.archives import delete_clip
+
             assert delete_clip("c1")["status"] == "deleted"
 
     def test_delete_not_found(self):
         mock = MagicMock()
         mock.delete_clip.return_value = False
         with patch("backend.api.archives._get_recorder", return_value=mock):
-            from backend.api.archives import delete_clip
             from fastapi import HTTPException
+
+            from backend.api.archives import delete_clip
+
             with pytest.raises(HTTPException):
                 delete_clip("no")
 
 
 # ── TensorRT backend ────────────────────────────────────────────
 
+
 class TestTensorRTCapabilities:
     def test_has_torch_compile(self):
         from core.mllm.inference_engine import TensorRTVLMBackend
+
         assert TensorRTVLMBackend._has_torch_compile()
 
     def test_has_torch_tensorrt_default_false(self):
         from core.mllm.inference_engine import TensorRTVLMBackend
+
         assert not TensorRTVLMBackend._has_torch_tensorrt()
 
     def test_has_onnxruntime_trt_default_false(self):
         from core.mllm.inference_engine import TensorRTVLMBackend
-        assert not TensorRTVLMBackend._has_onnxruntime_trt()
+
+        with patch("onnxruntime.get_available_providers") as mock_providers:
+            mock_providers.return_value = [
+                "CUDAExecutionProvider",
+                "CPUExecutionProvider",
+            ]
+            assert not TensorRTVLMBackend._has_onnxruntime_trt()
 
 
 class TestTensorRTInit:
     def test_attrs(self):
         from core.mllm.inference_engine import TensorRTVLMBackend
         from core.mllm.mllm_config import MLLMConfig
+
         b = TensorRTVLMBackend(MLLMConfig())
         assert b.backend_name.startswith("tensorrt")
         assert not b.is_loaded
 
     def test_find_engine_none(self):
         from core.mllm.inference_engine import TensorRTVLMBackend
+
         with tempfile.TemporaryDirectory() as d:
             import os as _os
+
             cwd = _os.getcwd()
             try:
                 _os.chdir(d)
@@ -87,6 +106,7 @@ class TestMockVLM:
     def test_generate(self):
         from core.mllm.inference_engine import MockVLMBackend
         from core.mllm.mllm_config import MLLMConfig
+
         b = MockVLMBackend(MLLMConfig())
         b.load()
         r = b.generate("test")
@@ -101,23 +121,30 @@ class TestInferenceEngine:
     def test_resolve_mock(self):
         from core.mllm.inference_engine import MLLMInferenceEngine, MockVLMBackend
         from core.mllm.mllm_config import MLLMConfig
+
         e = MLLMInferenceEngine(MLLMConfig(inference_backend="mock"))
         assert isinstance(e._resolve_backend(), MockVLMBackend)
 
     def test_resolve_tensorrt(self):
         from core.mllm.inference_engine import MLLMInferenceEngine, TensorRTVLMBackend
         from core.mllm.mllm_config import MLLMConfig
+
         e = MLLMInferenceEngine(MLLMConfig(inference_backend="tensorrt"))
         assert isinstance(e._resolve_backend(), TensorRTVLMBackend)
 
     def test_unloaded_generate(self):
         from core.mllm.inference_engine import MLLMInferenceEngine
         from core.mllm.mllm_config import MLLMConfig
-        assert MLLMInferenceEngine(MLLMConfig(inference_backend="mock")).generate("x") == ""
+
+        assert (
+            MLLMInferenceEngine(MLLMConfig(inference_backend="mock")).generate("x")
+            == ""
+        )
 
     def test_init_mock(self):
         from core.mllm.inference_engine import MLLMInferenceEngine
         from core.mllm.mllm_config import MLLMConfig
+
         e = MLLMInferenceEngine(MLLMConfig(inference_backend="mock"))
         e.initialize()
         assert e._backend and e._backend.is_loaded
@@ -127,6 +154,7 @@ class TestInferenceEngine:
     def test_stats_no_backend(self):
         from core.mllm.inference_engine import MLLMInferenceEngine
         from core.mllm.mllm_config import MLLMConfig
+
         s = MLLMInferenceEngine(MLLMConfig()).get_stats()
         assert s["backend"] == "none"
         assert not s["loaded"]
@@ -134,9 +162,11 @@ class TestInferenceEngine:
 
 # ── DetectionManager loading state ──────────────────────────────
 
+
 class TestDetectionManagerLoading:
     def test_status_returns_loading_state(self):
         from backend.detection_manager import DetectionManager
+
         mgr = DetectionManager()
         mgr._detection_active = True
         mgr._pipeline = None
@@ -148,6 +178,7 @@ class TestDetectionManagerLoading:
 
     def test_status_returns_error(self):
         from backend.detection_manager import DetectionManager
+
         mgr = DetectionManager()
         mgr._detection_active = False
         mgr._pipeline = None

@@ -95,7 +95,7 @@ def benchmark_api_latency(endpoint: str, iterations: int = 100) -> BenchmarkResu
     result = BenchmarkResults(name=f"API: {endpoint}", iterations=iterations)
     url = f"{API_PREFIX}{endpoint}"
 
-    for i in range(iterations):
+    for _i in range(iterations):
         try:
             start = time.perf_counter()
             response = requests.get(url, timeout=5)
@@ -122,7 +122,7 @@ def benchmark_status_polling(iterations: int = 50) -> BenchmarkResults:
     """
     result = BenchmarkResults(name="Status Polling", iterations=iterations)
 
-    for i in range(iterations):
+    for _i in range(iterations):
         try:
             start = time.perf_counter()
             response = requests.get(f"{API_PREFIX}/status", timeout=5)
@@ -152,7 +152,7 @@ def benchmark_monitoring_endpoint(iterations: int = 30) -> BenchmarkResults:
     result = BenchmarkResults(name="Monitoring Endpoint", iterations=iterations)
     url = f"{API_PREFIX}/monitoring"
 
-    for i in range(iterations):
+    for _i in range(iterations):
         try:
             start = time.perf_counter()
             response = requests.get(url, timeout=5)
@@ -170,7 +170,9 @@ def benchmark_monitoring_endpoint(iterations: int = 30) -> BenchmarkResults:
     return result
 
 
-def benchmark_concurrent_api(iterations: int = 100, concurrent: int = 10) -> dict[str, Any]:
+def benchmark_concurrent_api(
+    iterations: int = 100, concurrent: int = 10
+) -> dict[str, Any]:
     """Measure concurrent API request handling.
 
     Args:
@@ -233,7 +235,7 @@ async def benchmark_websocket_throughput(duration_s: int = 10) -> dict[str, Any]
         "errors": 0,
     }
 
-    ws_url = f"ws://localhost:8000/api/detection/stream"
+    ws_url = "ws://localhost:8000/api/detection/stream"
     ws = None
 
     try:
@@ -284,28 +286,38 @@ def run_all_benchmarks(quick: bool = False) -> list[dict[str, Any]]:
     print("\n[1/5] Testing API latency (status endpoint)...")
     r = benchmark_status_polling(iterations=iterations)
     results.append(r.to_dict())
-    print(f"  Avg: {r.avg_ms:.2f}ms | P95: {r.p95_ms:.2f}ms | Success: {r.success_rate*100:.1f}%")
+    print(
+        f"  Avg: {r.avg_ms:.2f}ms | P95: {r.p95_ms:.2f}ms | Success: {r.success_rate * 100:.1f}%"
+    )
 
     print("\n[2/5] Testing API latency (models endpoint)...")
     r = benchmark_api_latency("/models", iterations=iterations)
     results.append(r.to_dict())
-    print(f"  Avg: {r.avg_ms:.2f}ms | P95: {r.p95_ms:.2f}ms | Success: {r.success_rate*100:.1f}%")
+    print(
+        f"  Avg: {r.avg_ms:.2f}ms | P95: {r.p95_ms:.2f}ms | Success: {r.success_rate * 100:.1f}%"
+    )
 
     print("\n[3/5] Testing monitoring endpoint...")
     r = benchmark_monitoring_endpoint(iterations=iterations // 2)
     results.append(r.to_dict())
-    print(f"  Avg: {r.avg_ms:.2f}ms | P95: {r.p95_ms:.2f}ms | Success: {r.success_rate*100:.1f}%")
+    print(
+        f"  Avg: {r.avg_ms:.2f}ms | P95: {r.p95_ms:.2f}ms | Success: {r.success_rate * 100:.1f}%"
+    )
 
     print("\n[4/5] Testing concurrent requests...")
     r = benchmark_concurrent_api(iterations=iterations, concurrent=concurrent)
     results.append(r)
-    print(f"  Total: {r['total_requests']} | Success: {r['successful']} | {r['requests_per_sec']:.1f} req/s")
+    print(
+        f"  Total: {r['total_requests']} | Success: {r['successful']} | {r['requests_per_sec']:.1f} req/s"
+    )
 
     print("\n[5/5] Testing WebSocket throughput...")
     try:
         ws_result = asyncio.run(benchmark_websocket_throughput(duration_s=duration))
         results.append(ws_result)
-        print(f"  Messages: {ws_result['messages_received']} | {ws_result['messages_per_sec']:.1f} msg/s")
+        print(
+            f"  Messages: {ws_result['messages_received']} | {ws_result['messages_per_sec']:.1f} msg/s"
+        )
     except Exception as e:
         results.append({"name": "WebSocket Throughput", "error": str(e)})
         print(f"  WebSocket test failed: {e}")

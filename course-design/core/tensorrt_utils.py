@@ -18,45 +18,45 @@ For INT8 calibration:
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
-import pickle
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
+import cv2
 import numpy as np
-import torch
-import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
 # Lazy imports for TensorRT to avoid hard dependency
 try:
     import tensorrt as trt
+
     TRT_AVAILABLE = True
 except ImportError:
     TRT_AVAILABLE = False
     logger.warning("TensorRT not installed. GPU acceleration will use PyTorch only.")
 
-try:
-    import onnx
-    ONNX_AVAILABLE = True
-except ImportError:
-    ONNX_AVAILABLE = False
+onnx_spec = importlib.util.find_spec("onnx")
+ONNX_AVAILABLE = onnx_spec is not None
 
 try:
+    import pycuda.autoinit  # noqa: F401
     import pycuda.driver as cuda
-    import pycuda.autoinit
+
     PYCUDA_AVAILABLE = True
 except ImportError:
+    cuda = None
     PYCUDA_AVAILABLE = False
 
 
 @dataclass
 class TRTInferenceResult:
     """Unified result format matching Ultralytics YOLO output."""
+
     boxes: np.ndarray | None = None
     scores: np.ndarray | None = None
     classes: np.ndarray | None = None
@@ -69,6 +69,7 @@ class TRTInferenceResult:
 
 # Only define TensorRT-dependent classes when TensorRT is available
 if TRT_AVAILABLE:
+
     class TensorRTLogger(trt.ILogger):
         """TensorRT logger that maps to Python logging."""
 
@@ -77,9 +78,7 @@ if TRT_AVAILABLE:
             self.level = level
 
         def log(self, severity: trt.Logger.Severity, msg: str) -> None:
-            if severity == trt.Logger.INTERNAL_ERROR:
-                logger.error(f"[TRT] {msg}")
-            elif severity == trt.Logger.ERROR:
+            if severity == trt.Logger.INTERNAL_ERROR or severity == trt.Logger.ERROR:
                 logger.error(f"[TRT] {msg}")
             elif severity == trt.Logger.WARNING:
                 logger.warning(f"[TRT] {msg}")
@@ -186,9 +185,7 @@ if TRT_AVAILABLE:
                 raise RuntimeError("TensorRT context not initialized")
 
             # Copy input to GPU
-            cuda.memcpy_htod_async(
-                self.inputs[0]["device"], image.ravel(), self.stream
-            )
+            cuda.memcpy_htod_async(self.inputs[0]["device"], image.ravel(), self.stream)
 
             # Set input shape (for dynamic batch)
             self.context.set_input_shape(
@@ -254,6 +251,7 @@ if TRT_AVAILABLE:
 
         def _preprocess(self, image_path: str) -> np.ndarray:
             import cv2
+
             img = cv2.imread(image_path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = cv2.resize(img, (640, 640))
@@ -362,7 +360,9 @@ def build_tensorrt_engine(
     if not ONNX_AVAILABLE:
         raise RuntimeError("onnx is required for engine building")
 
-    logger.info(f"Building TensorRT engine: precision={precision}, batch={max_batch_size}")
+    logger.info(
+        f"Building TensorRT engine: precision={precision}, batch={max_batch_size}"
+    )
 
     logger_obj = TensorRTLogger(trt.Logger.INFO)
     builder = trt.Builder(logger_obj)
@@ -395,9 +395,7 @@ def build_tensorrt_engine(
         config.set_flag(trt.BuilderFlag.INT8)
         logger.info("INT8 mode enabled")
         if calibration_images:
-            calibrator = YOLOInt8Calibrator(
-                calibration_images, max_batch_size
-            )
+            calibrator = YOLOInt8Calibrator(calibration_images, max_batch_size)
             config.int8_calibrator = calibrator
     elif precision == "fp32":
         logger.info("FP32 mode (default)")
@@ -527,15 +525,19 @@ class TRTModelWrapper:
 
         detections = []
         for i in keep:
-            detections.append({
-                "box": xyxy[i].tolist(),
-                "conf": float(scores[i]),
-                "cls": int(class_ids[i]),
-            })
+            detections.append(
+                {
+                    "box": xyxy[i].tolist(),
+                    "conf": float(scores[i]),
+                    "cls": int(class_ids[i]),
+                }
+            )
 
         return detections
 
-    def _nms(self, boxes: np.ndarray, scores: np.ndarray, iou_threshold: float) -> list[int]:
+    def _nms(
+        self, boxes: np.ndarray, scores: np.ndarray, iou_threshold: float
+    ) -> list[int]:
         """Non-maximum suppression."""
         x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
         areas = (x2 - x1) * (y2 - y1)
@@ -632,7 +634,9 @@ class TensorRTConverter:
             Path to the TensorRT engine file
         """
         model_name = Path(model_path).stem
-        engine_dir = Path(self.config.engine_dir) if self.config else Path("models/trt_engines")
+        engine_dir = (
+            Path(self.config.engine_dir) if self.config else Path("models/trt_engines")
+        )
         onnx_dir = Path(self.config.onnx_dir) if self.config else Path("models/onnx")
         engine_dir.mkdir(parents=True, exist_ok=True)
         onnx_dir.mkdir(parents=True, exist_ok=True)

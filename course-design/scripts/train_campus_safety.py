@@ -26,6 +26,7 @@ GPU Memory Guide (RTX 4060 Laptop 8GB):
   yolo12s: batch=8,  ~2.5GB VRAM
   yolo12m: batch=4,  ~4.0GB VRAM
 """
+
 import argparse
 import os
 import sys
@@ -46,6 +47,7 @@ BATCH_SIZE_MAP = {
 def check_ultralytics():
     try:
         import ultralytics
+
         print(f"Ultralytics version: {ultralytics.__version__}")
         return True
     except ImportError:
@@ -57,6 +59,7 @@ def check_ultralytics():
 def check_gpu():
     try:
         import torch
+
         if torch.cuda.is_available():
             props = torch.cuda.get_device_properties(0)
             total_mb = props.total_memory / (1024**2)
@@ -94,8 +97,9 @@ def resolve_dataset(args):
 
 
 def train(args):
-    from ultralytics import YOLO
     from datetime import datetime
+
+    from ultralytics import YOLO
 
     model_name = args.model
     if not model_name.endswith(".pt"):
@@ -121,7 +125,7 @@ def train(args):
                 print("Please train first or specify --weights path")
                 return 1
             print(f"Resuming from latest checkpoint: {model_path}")
-        
+
         model = YOLO(model_path)
     else:
         print(f"Loading model: {model_name}")
@@ -152,49 +156,49 @@ def train(args):
         print(f"Resume timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    train_kwargs = dict(
-        data=data_yaml,
-        epochs=epochs,
-        imgsz=args.imgsz,
-        batch=batch,
-        device=args.device,
-        project=str(ROOT / "runs" / "detect" / "outputs" / "train"),
-        name="campus_safety",
-        exist_ok=True,
-        pretrained=True,
-        optimizer="SGD",
-        lr0=0.01,
-        lrf=0.01,
-        momentum=0.937,
-        weight_decay=0.0005,
-        warmup_epochs=3.0,
-        warmup_momentum=0.8,
-        box=7.5,
-        cls=0.5,
-        dfl=1.5,
-        augment=False,
-        auto_augment=None,
-        erasing=0.0,
-        hsv_h=0.0,
-        hsv_s=0.0,
-        hsv_v=0.0,
-        degrees=0.0,
-        translate=0.0,
-        scale=0.0,
-        shear=0.0,
-        perspective=0.0,
-        flipud=0.0,
-        fliplr=0.0,
-        mosaic=0.0,
-        mixup=0.0,
-        copy_paste=0.0,
-        close_mosaic=0,
-        deterministic=False,
-        save=True,
-        save_period=10,
-        workers=0,
-        cache=False,
-    )
+    train_kwargs = {
+        "data": data_yaml,
+        "epochs": epochs,
+        "imgsz": args.imgsz,
+        "batch": batch,
+        "device": args.device,
+        "project": str(ROOT / "runs" / "detect" / "outputs" / "train"),
+        "name": "campus_safety",
+        "exist_ok": True,
+        "pretrained": True,
+        "optimizer": "SGD",
+        "lr0": 0.01,
+        "lrf": 0.01,
+        "momentum": 0.937,
+        "weight_decay": 0.0005,
+        "warmup_epochs": 3.0,
+        "warmup_momentum": 0.8,
+        "box": 7.5,
+        "cls": 0.5,
+        "dfl": 1.5,
+        "augment": False,
+        "auto_augment": None,
+        "erasing": 0.0,
+        "hsv_h": 0.0,
+        "hsv_s": 0.0,
+        "hsv_v": 0.0,
+        "degrees": 0.0,
+        "translate": 0.0,
+        "scale": 0.0,
+        "shear": 0.0,
+        "perspective": 0.0,
+        "flipud": 0.0,
+        "fliplr": 0.0,
+        "mosaic": 0.0,
+        "mixup": 0.0,
+        "copy_paste": 0.0,
+        "close_mosaic": 0,
+        "deterministic": False,
+        "save": True,
+        "save_period": 10,
+        "workers": 0,
+        "cache": False,
+    }
 
     if vram_mb > 0:
         train_kwargs["amp"] = False
@@ -214,7 +218,10 @@ def train(args):
 def validate(args):
     from ultralytics import YOLO
 
-    model_path = args.weights or ROOT / "outputs" / "train" / "campus_safety" / "weights" / "best.pt"
+    model_path = (
+        args.weights
+        or ROOT / "outputs" / "train" / "campus_safety" / "weights" / "best.pt"
+    )
     if not Path(model_path).exists():
         print(f"ERROR: Model not found: {model_path}")
         return 1
@@ -224,7 +231,9 @@ def validate(args):
     if not data_yaml.exists():
         data_yaml = "coco128.yaml"
 
-    results = model.val(data=str(data_yaml) if isinstance(data_yaml, Path) else data_yaml)
+    results = model.val(
+        data=str(data_yaml) if isinstance(data_yaml, Path) else data_yaml
+    )
     print(f"mAP50: {results.box.map50:.4f}")
     print(f"mAP50-95: {results.box.map:.4f}")
     return 0
@@ -233,7 +242,10 @@ def validate(args):
 def export_model(args):
     from ultralytics import YOLO
 
-    model_path = args.weights or ROOT / "outputs" / "train" / "campus_safety" / "weights" / "best.pt"
+    model_path = (
+        args.weights
+        or ROOT / "outputs" / "train" / "campus_safety" / "weights" / "best.pt"
+    )
     if not Path(model_path).exists():
         print(f"ERROR: Model not found: {model_path}")
         return 1
@@ -248,17 +260,40 @@ def export_model(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Campus Safety Detection Training")
-    parser.add_argument("--model", default="yolo12n", help="Model name (yolo12n, yolo12s, yolo12m)")
-    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
+    parser.add_argument(
+        "--model", default="yolo12n", help="Model name (yolo12n, yolo12s, yolo12m)"
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=100, help="Number of training epochs"
+    )
     parser.add_argument("--imgsz", type=int, default=640, help="Input image size")
     parser.add_argument("--batch", type=int, default=0, help="Batch size (0=auto)")
     parser.add_argument("--device", default="0", help="Device (cpu, 0, 0,1,2,3)")
-    parser.add_argument("--dataset", default="coco2017", help="Dataset: coco128, coco2017, or /path/to/data.yaml")
-    parser.add_argument("--quick", action="store_true", help="Quick test: 5 epochs with COCO128")
-    parser.add_argument("--resume", action="store_true", help="Resume training from checkpoint")
-    parser.add_argument("--weights", default=None, help="Path to trained weights for val/export or resume")
-    parser.add_argument("--format", default="onnx", help="Export formats (onnx,engine,openvino)")
-    parser.add_argument("--mode", default="train", choices=["train", "val", "export"], help="Operation mode")
+    parser.add_argument(
+        "--dataset",
+        default="coco2017",
+        help="Dataset: coco128, coco2017, or /path/to/data.yaml",
+    )
+    parser.add_argument(
+        "--quick", action="store_true", help="Quick test: 5 epochs with COCO128"
+    )
+    parser.add_argument(
+        "--resume", action="store_true", help="Resume training from checkpoint"
+    )
+    parser.add_argument(
+        "--weights",
+        default=None,
+        help="Path to trained weights for val/export or resume",
+    )
+    parser.add_argument(
+        "--format", default="onnx", help="Export formats (onnx,engine,openvino)"
+    )
+    parser.add_argument(
+        "--mode",
+        default="train",
+        choices=["train", "val", "export"],
+        help="Operation mode",
+    )
     args = parser.parse_args()
 
     if not check_ultralytics():

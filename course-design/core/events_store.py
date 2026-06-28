@@ -11,7 +11,7 @@ import sqlite3
 import threading
 from typing import Any
 
-from core.constants import EVENT_FLUSH_BATCH, VACUUM_EVENT_COUNT
+from core.constants import VACUUM_EVENT_COUNT
 
 from .constants import DEFAULT_PRIORITY, EVENT_PRIORITIES
 from .db_base import SQLiteBase
@@ -56,7 +56,7 @@ class EventsStore(SQLiteBase):
         self.ensure_column_exists(cur, "events", "priority", "TEXT DEFAULT 'INFO'")
         self.ensure_column_exists(cur, "events", "source", "TEXT")
         self.ensure_column_exists(cur, "events", "feature_blob", "BLOB")
-        
+
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp_s);"
         )
@@ -153,7 +153,8 @@ class EventsStore(SQLiteBase):
             params.append(end_time)
         if search_text:
             conditions.append(
-                "(description LIKE ? OR extra_json LIKE ? OR snapshot_path LIKE ?)")
+                "(description LIKE ? OR extra_json LIKE ? OR snapshot_path LIKE ?)"
+            )
             like = f"%{search_text}%"
             params.extend([like, like, like])
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
@@ -179,6 +180,12 @@ class EventsStore(SQLiteBase):
             del d["bbox_json"]
             del d["extra_json"]
             del d["keypoints_json"]
+            # feature_blob is raw CLIP feature bytes (BLOB) used only by the
+            # in-process similarity indexer. It is NOT JSON-serializable, so
+            # leaving it in would make FastAPI raise 500 on /api/events. Drop
+            # the bytes and expose only a presence flag for the UI.
+            d["has_features"] = bool(d.get("feature_blob"))
+            d.pop("feature_blob", None)
             results.append(d)
         return results
 

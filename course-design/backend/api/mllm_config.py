@@ -19,6 +19,7 @@ router = APIRouter()
 
 # ── Pydantic Models ───────────────────────────────────────────
 
+
 class MLLMConfigResponse(BaseModel):
     enabled: bool = False
     interval: int = Field(30, ge=5, le=300)
@@ -49,6 +50,7 @@ class MLLMConfigUpdateRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────
 
+
 def _get_mllm_config_from_pipeline() -> dict:
     """Extract MLLM config from active pipeline or default config."""
     pipeline = detection_manager.get_pipeline()
@@ -64,7 +66,9 @@ def _get_mllm_config_from_pipeline() -> dict:
                 "shadow_mode": getattr(cfg, "shadow_mode", True),
                 "key_frame_interval": getattr(cfg, "key_frame_interval", 15),
                 "max_new_tokens": getattr(cfg, "max_new_tokens", 256),
-                "scene_description_enabled": getattr(cfg, "scene_description_enabled", True),
+                "scene_description_enabled": getattr(
+                    cfg, "scene_description_enabled", True
+                ),
                 "alarm_enhance_enabled": getattr(cfg, "alarm_enhance_enabled", True),
                 "enhancement_cooldown_s": getattr(cfg, "enhancement_cooldown_s", 10.0),
             }
@@ -74,6 +78,7 @@ def _get_mllm_config_from_pipeline() -> dict:
     # Fallback to YAML config
     try:
         from core.config import load_config
+
         cfg = load_config()
         mllm = cfg.mllm
         return {
@@ -85,7 +90,9 @@ def _get_mllm_config_from_pipeline() -> dict:
             "shadow_mode": getattr(mllm, "shadow_mode", True),
             "key_frame_interval": getattr(mllm, "key_frame_interval", 15),
             "max_new_tokens": getattr(mllm, "max_new_tokens", 256),
-            "scene_description_enabled": getattr(mllm, "scene_description_enabled", True),
+            "scene_description_enabled": getattr(
+                mllm, "scene_description_enabled", True
+            ),
             "alarm_enhance_enabled": getattr(mllm, "alarm_enhance_enabled", True),
             "enhancement_cooldown_s": getattr(mllm, "enhancement_cooldown_s", 10.0),
         }
@@ -94,6 +101,7 @@ def _get_mllm_config_from_pipeline() -> dict:
 
 
 # ── Endpoints ─────────────────────────────────────────────────
+
 
 @router.get("/config")
 def get_mllm_config():
@@ -139,6 +147,7 @@ def update_mllm_config(req: MLLMConfigUpdateRequest):
 
             # MLLMConfig is frozen, use replace
             from dataclasses import replace
+
             sidecar._config = replace(cfg, **updates)
 
             # Re-initialize if enabling
@@ -150,12 +159,13 @@ def update_mllm_config(req: MLLMConfigUpdateRequest):
             return {"status": "saved", "config": _get_mllm_config_from_pipeline()}
         except Exception as e:
             logger.error("Failed to update MLLM config: %s", e)
-            raise HTTPException(status_code=500, detail=f"Failed to update MLLM config: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to update MLLM config: {e}"
+            ) from e
 
     # No active pipeline - update YAML config only
     try:
-        import yaml
-        from backend.api.config import CONFIG_PATH, _read_config, _write_config
+        from backend.api.config import _read_config, _write_config
 
         cfg = _read_config()
         if "mllm" not in cfg:
@@ -189,4 +199,6 @@ def update_mllm_config(req: MLLMConfigUpdateRequest):
         return {"status": "saved", "config": mllm}
     except Exception as e:
         logger.error("Failed to update MLLM config in YAML: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to update MLLM config: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update MLLM config: {e}"
+        ) from e

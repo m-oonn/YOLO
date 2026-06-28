@@ -194,7 +194,9 @@ class AppConfig:
     rules: RulesConfig = field(default_factory=RulesConfig)
     pose: PoseConfig = field(default_factory=PoseConfig)
     sequence_model: SequenceModelConfig = field(default_factory=SequenceModelConfig)
-    adaptive_threshold: AdaptiveThresholdConfig = field(default_factory=AdaptiveThresholdConfig)
+    adaptive_threshold: AdaptiveThresholdConfig = field(
+        default_factory=AdaptiveThresholdConfig
+    )
     priority_alert: PriorityAlertConfig = field(default_factory=PriorityAlertConfig)
     mllm: MLLMConfig = field(default_factory=MLLMConfig)
     tensorrt: TensorRTConfig = field(default_factory=TensorRTConfig)
@@ -305,9 +307,12 @@ def load_config(path: str | None = None) -> AppConfig:
     fall = _parse_rule("fall", FallRule)
     crowd = _parse_rule("crowd", CrowdRule)
     fight = _parse_rule(
-        "fight", FightRule,
-        distance_threshold=150.0, movement_threshold=30.0,
-        iou_threshold=0.05, chaos_threshold=60.0,
+        "fight",
+        FightRule,
+        distance_threshold=150.0,
+        movement_threshold=30.0,
+        iou_threshold=0.05,
+        chaos_threshold=60.0,
         required_score=3,
     )
 
@@ -316,10 +321,12 @@ def load_config(path: str | None = None) -> AppConfig:
         intrusion_raw = {}
     zones = []
     for z in intrusion_raw.get("zones", []) or []:
+        # Accept both 'polygon' (legacy YAML) and 'coordinates' (API backend)
+        pts = z.get("polygon") or z.get("coordinates") or []
         zones.append(
             Zone(
                 name=str(z["name"]),
-                polygon=[[float(x), float(y)] for x, y in z["polygon"]],
+                polygon=[[float(x), float(y)] for x, y in pts],
             )
         )
     intrusion = IntrusionRule(
@@ -334,10 +341,12 @@ def load_config(path: str | None = None) -> AppConfig:
         vehicle_raw = {}
     vehicle_zones = []
     for z in vehicle_raw.get("zones", []) or []:
+        # Accept both 'polygon' (legacy YAML) and 'coordinates' (API backend)
+        pts = z.get("polygon") or z.get("coordinates") or []
         vehicle_zones.append(
             Zone(
                 name=str(z["name"]),
-                polygon=[[float(x), float(y)] for x, y in z["polygon"]],
+                polygon=[[float(x), float(y)] for x, y in pts],
             )
         )
     vehicle = VehicleRule(
@@ -349,6 +358,7 @@ def load_config(path: str | None = None) -> AppConfig:
 
     # Parse skeleton rules
     skeleton_raw = rules_raw.get("skeleton", {})
+
     def _parse_sk_rule(key: str, cls, **defaults):
         data = skeleton_raw.get(key, {})
         return cls(**{**defaults, **data})
@@ -413,14 +423,20 @@ def load_config(path: str | None = None) -> AppConfig:
         min_frame_size=int(mllm_raw.get("min_frame_size", 224)),
         max_frame_size=int(mllm_raw.get("max_frame_size", 512)),
         scene_description_enabled=bool(mllm_raw.get("scene_description_enabled", True)),
-        scene_confidence_threshold=float(mllm_raw.get("scene_confidence_threshold", 0.5)),
+        scene_confidence_threshold=float(
+            mllm_raw.get("scene_confidence_threshold", 0.5)
+        ),
         alarm_enhance_enabled=bool(mllm_raw.get("alarm_enhance_enabled", True)),
         enhancement_cooldown_s=float(mllm_raw.get("enhancement_cooldown_s", 10.0)),
         shadow_mode=bool(mllm_raw.get("shadow_mode", True)),
     )
 
     # Parse TensorRT config
-    trt_raw = mllm_raw.get("tensorrt", {}) if isinstance(mllm_raw.get("tensorrt"), dict) else {}
+    trt_raw = (
+        mllm_raw.get("tensorrt", {})
+        if isinstance(mllm_raw.get("tensorrt"), dict)
+        else {}
+    )
     tensorrt = TensorRTConfig(
         enabled=bool(trt_raw.get("enabled", False)),
         precision=str(trt_raw.get("precision", "fp16")),
@@ -441,7 +457,9 @@ def load_config(path: str | None = None) -> AppConfig:
     return AppConfig(
         model_path=str(model_cfg.get("path", "models/yolov11x.pt")),
         fall_model_path=str(model_cfg.get("fall_model_path", "models/best.pt")),
-        fight_model_path=str(model_cfg.get("fight_model_path", "models/suspicious_activity_nano.pt")),
+        fight_model_path=str(
+            model_cfg.get("fight_model_path", "models/suspicious_activity_nano.pt")
+        ),
         device=device,
         imgsz=int(model_cfg.get("imgsz", 640)),
         conf=float(model_cfg.get("conf", 0.25)),

@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref, nextTick } from 'vue'
 import { useAction } from '../../src/composables/useAction'
 
 describe('useAction', () => {
@@ -69,7 +68,7 @@ describe('useAction', () => {
       return 'result'
     })
 
-    const { isLoading, execute } = useAction({ action })
+    const { execute } = useAction({ action })
 
     const promise1 = execute()
     const promise2 = execute()

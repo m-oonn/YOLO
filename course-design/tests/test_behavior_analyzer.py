@@ -16,22 +16,32 @@ import pytest
 from core.behavior_analyzer import (
     AdaptiveThresholdManager,
     CrowdDensityAnalyzer,
+    SkeletonFallRule,
     SkeletonFightRule,
     SkeletonFrameBuffer,
     SkeletonRunningRule,
-    SkeletonFallRule,
 )
 from core.config import (
+    AdaptiveThresholdConfig,
     AppConfig,
+    PoseConfig,
     RulesConfig,
     SkeletonRulesConfig,
-    SkeletonRunningRule as SkRunCfg,
-    SkeletonFallRule as SkFallCfg,
-    SkeletonFightRule as SkFightCfg,
+)
+from core.config import (
     SkeletonCrowdRule as SkCrowdCfg,
+)
+from core.config import (
+    SkeletonFallRule as SkFallCfg,
+)
+from core.config import (
+    SkeletonFightRule as SkFightCfg,
+)
+from core.config import (
     SkeletonIntrusionRule as SkIntrCfg,
-    AdaptiveThresholdConfig,
-    PoseConfig,
+)
+from core.config import (
+    SkeletonRunningRule as SkRunCfg,
 )
 from core.skeleton import Skeleton, SkeletonKeypoint
 
@@ -48,7 +58,7 @@ def make_skeleton(track_id, x, y, conf=0.9, n_kpts=17):
     # Monkey-patch attributes expected by behavior_analyzer
     sk.head_height = y
     # Use object.__setattr__ to bypass property setter
-    object.__setattr__(sk, '_center_override', (x + 25, y + 50))
+    object.__setattr__(sk, "_center_override", (x + 25, y + 50))
     return sk
 
 
@@ -122,6 +132,7 @@ class TestSkeletonFightRule:
         # Simulate 30 frames of chaotic close movement with high speed
         events = []
         import random
+
         random.seed(42)
         for frame_idx in range(30):
             t = frame_idx * 0.2
@@ -160,8 +171,8 @@ class TestSkeletonFightRule:
 
     def test_adaptive_threshold_integration(self):
         cfg = make_config()
-        rule = SkeletonFightRule(cfg)
-        buf = SkeletonFrameBuffer()
+        SkeletonFightRule(cfg)
+        SkeletonFrameBuffer()
         mgr = AdaptiveThresholdManager(cfg)
 
         # Record some false positives to raise threshold
@@ -194,8 +205,7 @@ class TestCrowdDensityAnalyzer:
 
         # Many people in small area with varied positions
         skeletons = [
-            make_skeleton(i, 100 + (i % 3) * 20, 100 + (i // 3) * 25)
-            for i in range(8)
+            make_skeleton(i, 100 + (i % 3) * 20, 100 + (i // 3) * 25) for i in range(8)
         ]
         buf = SkeletonFrameBuffer()
 
@@ -216,13 +226,16 @@ class TestCrowdDensityAnalyzer:
         cfg = make_config()
         analyzer = CrowdDensityAnalyzer(cfg)
 
-        skeletons = [make_skeleton(i, 100 + i * 30, 100 + i * 20 + (i % 2) * 40) for i in range(5)]
+        skeletons = [
+            make_skeleton(i, 100 + i * 30, 100 + i * 20 + (i % 2) * 40)
+            for i in range(5)
+        ]
         buf = SkeletonFrameBuffer()
 
         # First frame
-        e1 = analyzer.detect(skeletons, 0.0, 1, buf)
+        analyzer.detect(skeletons, 0.0, 1, buf)
         # Second frame should use smoothed density
-        e2 = analyzer.detect(skeletons, 0.5, 2, buf)
+        analyzer.detect(skeletons, 0.5, 2, buf)
 
         # History should smooth the density values
         assert len(analyzer._density_history) > 0
@@ -309,8 +322,8 @@ class TestSkeletonFallRule:
 
     def test_adaptive_angle_threshold(self):
         cfg = make_config()
-        rule = SkeletonFallRule(cfg)
-        buf = SkeletonFrameBuffer()
+        SkeletonFallRule(cfg)
+        SkeletonFrameBuffer()
         mgr = AdaptiveThresholdManager(cfg)
 
         # Record FPs to raise threshold
@@ -326,12 +339,10 @@ class TestPerformanceOptimization:
 
     def test_frame_skip_counter(self):
         # Just test the counter logic
-        counter = 0
         interval = 2
         process_frames = []
-        for i in range(10):
-            counter += 1
-            if counter % interval == 0:
+        for idx, i in enumerate(range(10), start=1):
+            if idx % interval == 0:
                 process_frames.append(i)
 
         assert process_frames == [1, 3, 5, 7, 9]

@@ -81,6 +81,7 @@ def download_huggingface(repo: str) -> str | None:
 
         # Copy .pt files to pretrained for YOLO models
         import shutil
+
         pt_dir = MODELS_DIR / "pretrained"
         pt_dir.mkdir(exist_ok=True)
         for f in Path(path).glob("*.pt"):
@@ -189,7 +190,7 @@ def main():
         list_models()
         return
 
-    keys = [k for k in MODELS]
+    keys = list(MODELS)
     if args.only:
         keys = [k.strip() for k in args.only.split(",")]
         invalid = set(keys) - set(MODELS)
@@ -218,7 +219,7 @@ def main():
 
     if fail > 0 and not os.environ.get("HF_ENDPOINT"):
         print("\nTip: For China networks, set the HF mirror:")
-        print('  set HF_ENDPOINT=https://hf-mirror.com')
+        print("  set HF_ENDPOINT=https://hf-mirror.com")
 
 
 if __name__ == "__main__":

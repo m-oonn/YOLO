@@ -14,10 +14,21 @@
     <!-- Stream error (only after we've seen at least one frame) -->
     <div v-if="hasError && hasLoadedOnce" class="stream-overlay">
       <div class="overlay-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--color-danger)"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+          />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
       </div>
       <p class="overlay-text">画面连接中断</p>
@@ -45,10 +56,19 @@
     <!-- Stopped placeholder -->
     <div v-if="!isRunning" class="stream-overlay">
       <div class="overlay-icon">
-        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--text-disabled)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="5" width="20" height="14" rx="3"/>
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" opacity="0.4"/>
+        <svg
+          width="56"
+          height="56"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--text-disabled)"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="2" y="5" width="20" height="14" rx="3" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" opacity="0.4" />
         </svg>
       </div>
       <p class="overlay-text">{{ placeholderText || '点击开始以查看视频流' }}</p>
@@ -86,20 +106,26 @@ const hasLoadedOnce = ref(false)
 const streamImg = ref(null)
 
 // Reset state when stream URL changes (new stream attempt)
-watch(() => props.streamUrl, (newUrl) => {
-  if (newUrl) {
-    hasError.value = false
-    isLoading.value = true
-    hasLoadedOnce.value = false
+watch(
+  () => props.streamUrl,
+  (newUrl) => {
+    if (newUrl) {
+      hasError.value = false
+      isLoading.value = true
+      hasLoadedOnce.value = false
+    }
   }
-})
+)
 
 // Reset when detection stops
-watch(() => props.isRunning, (running) => {
-  if (!running) {
-    hasLoadedOnce.value = false
+watch(
+  () => props.isRunning,
+  (running) => {
+    if (!running) {
+      hasLoadedOnce.value = false
+    }
   }
-})
+)
 
 const onStreamLoad = () => {
   isLoading.value = false
@@ -262,7 +288,11 @@ const onStreamError = () => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

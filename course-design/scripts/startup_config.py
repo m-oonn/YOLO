@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 
 @dataclass
 class BackendConfig:
     """Backend service configuration."""
+
     host: str = "0.0.0.0"
     port: int = 8000
     workers: int = 1
@@ -31,6 +31,7 @@ class BackendConfig:
 @dataclass
 class FrontendConfig:
     """Frontend service configuration."""
+
     enabled: bool = True
     port: int = 8080
     host: str = "127.0.0.1"
@@ -42,6 +43,7 @@ class FrontendConfig:
 @dataclass
 class DatabaseConfig:
     """Database configuration."""
+
     path: str = "outputs/events.db"
     auto_migrate: bool = True  # Auto-add missing columns
 
@@ -49,6 +51,7 @@ class DatabaseConfig:
 @dataclass
 class StartupOptions:
     """Main startup configuration container."""
+
     backend: BackendConfig = field(default_factory=BackendConfig)
     frontend: FrontendConfig = field(default_factory=FrontendConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
@@ -94,7 +97,11 @@ def load_from_env() -> StartupOptions:
 
     # Frontend settings
     if os.getenv("FRONTEND_ENABLED"):
-        options.frontend.enabled = os.getenv("FRONTEND_ENABLED").lower() in ("true", "1", "yes")
+        options.frontend.enabled = os.getenv("FRONTEND_ENABLED").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
     if os.getenv("FRONTEND_PORT"):
         options.frontend.port = int(os.getenv("FRONTEND_PORT"))
 
@@ -110,6 +117,7 @@ def load_from_env() -> StartupOptions:
 def detect_platform() -> str:
     """Detect current platform."""
     import platform
+
     system = platform.system().lower()
     if system == "windows":
         return "windows"
@@ -127,8 +135,16 @@ def get_platform_config() -> dict[str, Any]:
         "shell_extension": ".sh" if platform_name != "windows" else ".bat",
         "python_cmd": "python" if platform_name == "windows" else "python3",
         "node_cmd": "npm",
-        "clipboard_cmd": "clip" if platform_name == "windows" else "pbcopy" if platform_name == "macos" else "xclip",
-        "browser_cmd": "start" if platform_name == "windows" else "open" if platform_name == "macos" else "xdg-open",
+        "clipboard_cmd": "clip"
+        if platform_name == "windows"
+        else "pbcopy"
+        if platform_name == "macos"
+        else "xclip",
+        "browser_cmd": "start"
+        if platform_name == "windows"
+        else "open"
+        if platform_name == "macos"
+        else "xdg-open",
     }
 
     return config

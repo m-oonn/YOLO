@@ -10,6 +10,7 @@ import sys
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()  # Load .env file before any os.environ reads
 except ImportError:
     # If dotenv not available, skip (we'll use defaults)
@@ -24,18 +25,21 @@ import time as _time
 
 _boot_ts = _time.perf_counter()
 
-from .exceptions import YOLOException
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .exceptions import YOLOException
+
 # Optional slowapi import (skip if not available)
 try:
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
+
     from .limiter import app_limiter
+
     limiter = app_limiter
     has_slowapi = True
 except ImportError:
@@ -44,6 +48,7 @@ except ImportError:
 
 _t0 = _time.perf_counter()
 from .api import cameras, detection, events  # noqa: E402
+
 _t1 = _time.perf_counter()
 
 from .api.alarms import router as alarms_router  # noqa: E402
@@ -51,8 +56,12 @@ from .api.archives import router as archives_router  # noqa: E402
 from .api.config import router as config_router  # noqa: E402
 from .api.mllm import router as mllm_router  # noqa: E402
 from .api.mllm_config import router as mllm_config_router  # noqa: E402
-from .logging_utils import clear_request_id, generate_request_id, setup_logging  # noqa: E402
+from .logging_utils import (  # noqa: E402
+    generate_request_id,
+    setup_logging,
+)
 from .store import close_store  # noqa: E402
+
 _t2 = _time.perf_counter()
 
 os.makedirs("outputs", exist_ok=True)
@@ -68,7 +77,9 @@ _boot_elapsed = (_time.perf_counter() - _boot_ts) * 1000
 logger.info(
     "Backend module import timing: api-cameras/detection/events=%.0fms, "
     "remaining-routers=%.0fms, total=%.0fms",
-    (_t1 - _t0) * 1000, (_t2 - _t1) * 1000, _boot_elapsed,
+    (_t1 - _t0) * 1000,
+    (_t2 - _t1) * 1000,
+    _boot_elapsed,
 )
 
 
@@ -88,6 +99,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down YOLO Course Design API")
     try:
         from backend.alarm_singleton import close_alarm_engine
+
         close_alarm_engine()
     except Exception:
         pass
@@ -102,23 +114,30 @@ def _prewarm_model():
     frame latency from ~5s to ~0.1s.
     """
     logger.info("Pre-warming YOLO model (background thread)...")
+
     def _warm():
-        from core.config import load_config
-        from ultralytics import YOLO
         import numpy as np
+        from ultralytics import YOLO
+
+        from core.config import load_config
+
         try:
             cfg = load_config()
             model = YOLO(cfg.model_path)
             model.eval()
             model.predict(
                 np.random.randint(0, 255, (640, 640, 3), dtype=np.uint8),
-                imgsz=640, device="cuda" if cfg.device != "cpu" else "cpu",
-                verbose=False, half=cfg.half,
+                imgsz=640,
+                device="cuda" if cfg.device != "cpu" else "cpu",
+                verbose=False,
+                half=cfg.half,
             )
             logger.info("Model pre-warm complete (CUDA kernels compiled).")
         except Exception as e:
             logger.warning("Model pre-warm failed (non-fatal): %s", e)
+
     import threading
+
     t = threading.Thread(target=_warm, daemon=True)
     t.start()
 
@@ -219,6 +238,7 @@ async def request_tracing_middleware(request: Request, call_next):
     """Inject a request_id into every request for tracing."""
     rid = request.headers.get("X-Request-ID") or generate_request_id()
     from .logging_utils import set_request_id
+
     set_request_id(rid)
     try:
         response = await call_next(request)
@@ -226,6 +246,7 @@ async def request_tracing_middleware(request: Request, call_next):
         return response
     finally:
         from .logging_utils import clear_request_id
+
         clear_request_id()
 
 
@@ -251,18 +272,21 @@ async def log_requests(request: Request, call_next):
         pass
     if 400 <= response.status_code < 500:
         logger.warning(
-            "%(method)s %(path)s -> %(status)d [%(client_ip)s] (%(duration_ms).2fms)"
-            % log_kwargs
+            f"{log_kwargs['method']} {log_kwargs['path']} -> "
+            f"{log_kwargs['status']} [{log_kwargs['client_ip']}] "
+            f"({log_kwargs['duration_ms']:.2f}ms)"
         )
     elif response.status_code >= 500:
         logger.error(
-            "%(method)s %(path)s -> %(status)d [%(client_ip)s] (%(duration_ms).2fms)"
-            % log_kwargs
+            f"{log_kwargs['method']} {log_kwargs['path']} -> "
+            f"{log_kwargs['status']} [{log_kwargs['client_ip']}] "
+            f"({log_kwargs['duration_ms']:.2f}ms)"
         )
     else:
         logger.info(
-            "%(method)s %(path)s -> %(status)d [%(client_ip)s] (%(duration_ms).2fms)"
-            % log_kwargs
+            f"{log_kwargs['method']} {log_kwargs['path']} -> "
+            f"{log_kwargs['status']} [{log_kwargs['client_ip']}] "
+            f"({log_kwargs['duration_ms']:.2f}ms)"
         )
     return response
 

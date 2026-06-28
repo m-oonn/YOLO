@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import logging
 import smtplib
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from email.mime.text import MIMEText
 from typing import Any
@@ -32,7 +31,11 @@ class NotificationResult:
         self.message = message
 
     def to_dict(self) -> dict[str, Any]:
-        return {"channel": self.channel, "success": self.success, "message": self.message}
+        return {
+            "channel": self.channel,
+            "success": self.success,
+            "message": self.message,
+        }
 
 
 class LogNotifier:
@@ -43,7 +46,9 @@ class LogNotifier:
 
     def send(self, alarm: Alarm) -> NotificationResult:
         level_name = EVENT_LEVEL_LABELS.get(alarm.level, "未知")
-        log_level = logging.CRITICAL if alarm.level >= AlarmLevel.CRITICAL else logging.WARNING
+        log_level = (
+            logging.CRITICAL if alarm.level >= AlarmLevel.CRITICAL else logging.WARNING
+        )
         logger.log(
             log_level,
             "[ALARM][%s] %s | key=%s count=%d desc=%s",
@@ -72,18 +77,20 @@ class WebhookNotifier:
         try:
             import urllib.request
 
-            payload = json.dumps({
-                "alarm_key": alarm.alarm_key,
-                "event_type": alarm.event_type,
-                "level": int(alarm.level),
-                "level_label": EVENT_LEVEL_LABELS.get(alarm.level, "未知"),
-                "status": alarm.status,
-                "count": alarm.count,
-                "description": alarm.description,
-                "first_event_time": alarm.first_event_time,
-                "last_event_time": alarm.last_event_time,
-                "extra": alarm.extra,
-            }).encode("utf-8")
+            payload = json.dumps(
+                {
+                    "alarm_key": alarm.alarm_key,
+                    "event_type": alarm.event_type,
+                    "level": int(alarm.level),
+                    "level_label": EVENT_LEVEL_LABELS.get(alarm.level, "未知"),
+                    "status": alarm.status,
+                    "count": alarm.count,
+                    "description": alarm.description,
+                    "first_event_time": alarm.first_event_time,
+                    "last_event_time": alarm.last_event_time,
+                    "extra": alarm.extra,
+                }
+            ).encode("utf-8")
 
             req = urllib.request.Request(
                 self.url,
@@ -92,7 +99,9 @@ class WebhookNotifier:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                return NotificationResult("webhook", resp.status < 400, f"HTTP {resp.status}")
+                return NotificationResult(
+                    "webhook", resp.status < 400, f"HTTP {resp.status}"
+                )
         except Exception as e:
             return NotificationResult("webhook", False, str(e))
 
@@ -116,7 +125,9 @@ class EmailNotifier:
 
         try:
             level_label = EVENT_LEVEL_LABELS.get(alarm.level, "未知")
-            subject = f"[YOLO报警][{level_label}] {alarm.event_type} - {alarm.alarm_key}"
+            subject = (
+                f"[YOLO报警][{level_label}] {alarm.event_type} - {alarm.alarm_key}"
+            )
             body = (
                 f"报警类型: {alarm.event_type}\n"
                 f"报警级别: {level_label}\n"
@@ -178,13 +189,17 @@ class NotificationDispatcher:
         if "console" in config and config["console"].get("enabled", False):
             self._notifiers["console"] = ConsoleNotifier(config["console"])
 
-    def dispatch(self, alarm: Alarm, channels: list[str] | None = None) -> list[NotificationResult]:
+    def dispatch(
+        self, alarm: Alarm, channels: list[str] | None = None
+    ) -> list[NotificationResult]:
         targets = channels or list(self._notifiers.keys())
         results = []
         for channel in targets:
             notifier = self._notifiers.get(channel)
             if notifier is None:
-                results.append(NotificationResult(channel, False, "Channel not configured"))
+                results.append(
+                    NotificationResult(channel, False, "Channel not configured")
+                )
                 continue
             try:
                 result = notifier.send(alarm)

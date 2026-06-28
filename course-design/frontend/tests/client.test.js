@@ -49,10 +49,14 @@ describe('API Client', () => {
       const { detectionAPI } = await import('../src/api/client')
       await detectionAPI.start('0', 'configs/default.yaml')
 
-      expect(instance.post).toHaveBeenCalledWith('/detection/start', {
-        source: '0',
-        config: 'configs/default.yaml',
-      }, { timeout: 90000 })
+      expect(instance.post).toHaveBeenCalledWith(
+        '/detection/start',
+        {
+          source: '0',
+          config: 'configs/default.yaml',
+        },
+        { timeout: 90000 }
+      )
     })
 
     it('stop returns status', async () => {

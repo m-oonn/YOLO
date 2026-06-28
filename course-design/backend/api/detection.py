@@ -24,7 +24,15 @@ try:
     import filetype
 except ImportError:
     filetype = None
-from fastapi import APIRouter, File, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -70,7 +78,6 @@ def _get_component_health() -> dict[str, str]:
     components = {}
 
     try:
-        import psutil
         components["cpu"] = "healthy"
         components["memory"] = "healthy"
     except Exception:
@@ -78,6 +85,7 @@ def _get_component_health() -> dict[str, str]:
 
     try:
         from core.gpu_manager import GPUManager
+
         gpu = GPUManager()
         gpu_status = gpu.get_status_dict()
         if gpu_status.get("gpu_available"):
@@ -87,8 +95,12 @@ def _get_component_health() -> dict[str, str]:
     except Exception:
         components["gpu"] = "unavailable"
 
-    components["detection_manager"] = "healthy" if not detection_manager._detection_active else "running"
-    components["pipeline"] = "healthy" if detection_manager.get_pipeline() else "inactive"
+    components["detection_manager"] = (
+        "healthy" if not detection_manager._detection_active else "running"
+    )
+    components["pipeline"] = (
+        "healthy" if detection_manager.get_pipeline() else "inactive"
+    )
 
     return components
 
@@ -108,6 +120,7 @@ def health_check():
         uptime_s=time.time() - _start_time,
         components=_get_component_health(),
     )
+
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 MODELS_DIR = PROJECT_ROOT / "models"
@@ -150,15 +163,19 @@ class SaveConfigRequest(BaseModel):
 
 def _resolve_config_path(config: str) -> str:
     """Resolve config file path relative to project root.
-    
+
     Prevents path traversal by rejecting paths containing '..' or
     absolute paths that resolve outside the project root.
     """
     if ".." in config:
-        raise HTTPException(status_code=400, detail="Invalid config path: path traversal detected")
+        raise HTTPException(
+            status_code=400, detail="Invalid config path: path traversal detected"
+        )
     resolved = Path(PROJECT_ROOT) / config
     if not str(resolved.resolve()).startswith(str(Path(PROJECT_ROOT).resolve())):
-        raise HTTPException(status_code=400, detail="Invalid config path: path outside project root")
+        raise HTTPException(
+            status_code=400, detail="Invalid config path: path outside project root"
+        )
     if not resolved.exists():
         raise HTTPException(status_code=404, detail=f"Config file not found: {config}")
     return str(resolved)
@@ -189,25 +206,36 @@ def _get_system_stats() -> dict:
 
 # ── GPU recommendations helper ────────────────────────────────
 
+
 def _get_gpu_recommendations(gpu_mgr) -> list[str]:
     recs = []
     if not gpu_mgr.is_gpu_available:
         recs.append("未检测到GPU，当前使用CPU推理。安装CUDA版PyTorch可提升3-5倍帧率。")
-        recs.append("推荐: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121")
+        recs.append(
+            "推荐: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121"
+        )
     else:
         info = gpu_mgr.gpu_info
         pressure = gpu_mgr.get_memory_pressure()
 
         if pressure in ("high", "critical"):
-            recs.append(f"⚠️ GPU显存压力{pressure}！建议：1)关闭Ollama等占用GPU的程序 2)使用yolo12n.pt替代大模型 3)降低inference_scale至0.5")
+            recs.append(
+                f"⚠️ GPU显存压力{pressure}！建议：1)关闭Ollama等占用GPU的程序 2)使用yolo12n.pt替代大模型 3)降低inference_scale至0.5"
+            )
 
         if info.total_memory_mb < 4000:
-            recs.append(f"GPU显存较小({info.total_memory_mb:.0f}MB)，建议使用yolo12n.pt模型或降低推理缩放。")
+            recs.append(
+                f"GPU显存较小({info.total_memory_mb:.0f}MB)，建议使用yolo12n.pt模型或降低推理缩放。"
+            )
         elif info.total_memory_mb < 6000:
-            recs.append(f"GPU显存中等({info.total_memory_mb:.0f}MB)，建议使用yolo12s.pt模型，避免同时运行其他GPU程序。")
+            recs.append(
+                f"GPU显存中等({info.total_memory_mb:.0f}MB)，建议使用yolo12s.pt模型，避免同时运行其他GPU程序。"
+            )
 
         if not info.supports_tensor_cores:
-            recs.append("当前GPU不支持Tensor Cores，FP16加速效果有限。Volta及以上架构(Turing/Ampere/Ada)效果最佳。")
+            recs.append(
+                "当前GPU不支持Tensor Cores，FP16加速效果有限。Volta及以上架构(Turing/Ampere/Ada)效果最佳。"
+            )
         if gpu_mgr.is_cuda:
             recs.append("GPU已就绪。确保配置中device='auto'或'cuda:0'以启用GPU加速。")
         elif gpu_mgr.is_mps:
@@ -216,6 +244,7 @@ def _get_gpu_recommendations(gpu_mgr) -> list[str]:
 
 
 # ── Detection Control ─────────────────────────────────────────
+
 
 @router.post("/start")
 @limiter.limit("10/minute")
@@ -256,6 +285,7 @@ def update_detection_config(req: DetectionConfigRequest):
 
 # ── Model Management ──────────────────────────────────────────
 
+
 @router.get("/models")
 def list_available_models():
     """List all available YOLO models in the models directory.
@@ -271,18 +301,24 @@ def list_available_models():
                 full_path = MODELS_DIR / filename
                 try:
                     size_mb = full_path.stat().st_size / (1024 * 1024)
-                    available_models.append({
-                        "name": filename,
-                        "path": model_path,
-                        "size_mb": round(size_mb, 2),
-                    })
+                    available_models.append(
+                        {
+                            "name": filename,
+                            "path": model_path,
+                            "size_mb": round(size_mb, 2),
+                        }
+                    )
                 except OSError:
                     continue
 
     pipeline = detection_manager.get_pipeline()
     current_model = None
     if pipeline:
-        current_model = getattr(pipeline, '_runtime', None).model_path if getattr(pipeline, '_runtime', None) else pipeline.cfg.model_path
+        current_model = (
+            getattr(pipeline, "_runtime", None).model_path
+            if getattr(pipeline, "_runtime", None)
+            else pipeline.cfg.model_path
+        )
     else:
         cfg_data = load_config(PROJECT_ROOT / "configs" / "default.yaml")
         current_model = cfg_data.model_path
@@ -297,17 +333,21 @@ def list_available_models():
 def get_gpu_status():
     """Get detailed GPU status and capabilities."""
     from core.gpu_manager import GPUManager
+
     gpu_mgr = GPUManager()
     status = gpu_mgr.get_status_dict()
     status["recommendations"] = _get_gpu_recommendations(gpu_mgr)
 
     try:
         import torch
+
         if torch.cuda.is_available():
             status["pytorch_memory"] = {
                 "allocated_mb": round(torch.cuda.memory_allocated(0) / (1024**2), 1),
                 "reserved_mb": round(torch.cuda.memory_reserved(0) / (1024**2), 1),
-                "max_allocated_mb": round(torch.cuda.max_memory_allocated(0) / (1024**2), 1),
+                "max_allocated_mb": round(
+                    torch.cuda.max_memory_allocated(0) / (1024**2), 1
+                ),
             }
     except Exception:
         pass
@@ -338,14 +378,16 @@ def get_monitoring_stats():
         "detection": {
             "running": detection_manager._detection_active,
             "source": detection_manager._current_source,
-            "pipeline_stats": detection_manager.get_pipeline_stats() if pipeline else None,
+            "pipeline_stats": detection_manager.get_pipeline_stats()
+            if pipeline
+            else None,
             "mjpeg_clients": detection_manager.get_mjpeg_client_count(),
         },
         "gpu": gpu_mgr.get_status_dict(),
         "system": _get_system_stats(),
     }
 
-    if pipeline and hasattr(pipeline, '_mllm_sidecar'):
+    if pipeline and hasattr(pipeline, "_mllm_sidecar"):
         try:
             response["mllm"] = pipeline._mllm_sidecar.get_stats()
         except Exception:
@@ -393,7 +435,7 @@ def switch_model(req: ModelSwitchRequest):
     """
     model_rel_path = req.model_path
     if model_rel_path.startswith("models/") or model_rel_path.startswith("models\\"):
-        model_rel_path = model_rel_path[len("models/"):]
+        model_rel_path = model_rel_path[len("models/") :]
 
     is_valid, error_msg = validate_model_path(model_rel_path, MODELS_DIR)
     if not is_valid:
@@ -408,7 +450,7 @@ def switch_model(req: ModelSwitchRequest):
 
     config_path = PROJECT_ROOT / "configs" / "default.yaml"
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             yaml_data = yaml.safe_load(f) or {}
         if "model" not in yaml_data:
             yaml_data["model"] = {}
@@ -513,7 +555,7 @@ def get_detection_config():
     if not os.path.exists(config_path):
         return {"status": "not_found", "config": {}}
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             yaml_data = yaml.safe_load(f) or {}
         return {"status": "ok", "config": yaml_data}
     except Exception as e:
@@ -528,7 +570,8 @@ def save_detection_config(req: SaveConfigRequest):
 
     try:
         import yaml as yaml_lib
-        with open(config_path, "r", encoding="utf-8") as f:
+
+        with open(config_path, encoding="utf-8") as f:
             current_yaml = yaml_lib.safe_load(f) or {}
         current_mllm = current_yaml.get("mllm", {})
         if not isinstance(current_mllm, dict):
@@ -564,14 +607,22 @@ def save_detection_config(req: SaveConfigRequest):
             "crowd": req.rules.get("crowd", {}).get("enabled", True),
             "intrusion": {
                 "enabled": req.rules.get("intrusion", {}).get("enabled", True),
-                "debounce_s": float(req.rules.get("intrusion", {}).get("debounce_s", 5.0)),
+                "debounce_s": float(
+                    req.rules.get("intrusion", {}).get("debounce_s", 5.0)
+                ),
                 "zones": req.rules.get("intrusion", {}).get("zones", []),
             },
             "fight": {
                 "enabled": req.rules.get("fight", {}).get("enabled", True),
-                "distance_threshold": int(req.rules.get("fight", {}).get("distance_threshold", 150)),
-                "movement_threshold": int(req.rules.get("fight", {}).get("movement_threshold", 30)),
-                "min_duration_s": float(req.rules.get("fight", {}).get("min_duration_s", 0.5)),
+                "distance_threshold": int(
+                    req.rules.get("fight", {}).get("distance_threshold", 150)
+                ),
+                "movement_threshold": int(
+                    req.rules.get("fight", {}).get("movement_threshold", 30)
+                ),
+                "min_duration_s": float(
+                    req.rules.get("fight", {}).get("min_duration_s", 0.5)
+                ),
                 "debounce_s": float(req.rules.get("fight", {}).get("debounce_s", 5.0)),
             },
         },
@@ -589,15 +640,39 @@ def save_detection_config(req: SaveConfigRequest):
         },
         "mllm": {
             "enabled": req.mllm.get("enabled", current_mllm.get("enabled", False)),
-            "model_type": req.mllm.get("model_type", current_mllm.get("model_type", "qwen2-vl-2b")),
-            "model_path": req.mllm.get("model_path", current_mllm.get("model_path", "models/mllm/qwen2-vl-2b")),
-            "inference_backend": req.mllm.get("inference_backend", current_mllm.get("inference_backend", "mock")),
-            "shadow_mode": req.mllm.get("shadow_mode", current_mllm.get("shadow_mode", True)),
-            "key_frame_interval": int(req.mllm.get("key_frame_interval", current_mllm.get("key_frame_interval", 15))),
-            "max_new_tokens": int(req.mllm.get("max_new_tokens", current_mllm.get("max_new_tokens", 256))),
-            "scene_description_enabled": req.mllm.get("scene_description_enabled", current_mllm.get("scene_description_enabled", True)),
-            "alarm_enhance_enabled": req.mllm.get("alarm_enhance_enabled", current_mllm.get("alarm_enhance_enabled", True)),
-            "enhancement_cooldown_s": float(req.mllm.get("enhancement_cooldown_s", current_mllm.get("enhancement_cooldown_s", 10.0))),
+            "model_type": req.mllm.get(
+                "model_type", current_mllm.get("model_type", "qwen2-vl-2b")
+            ),
+            "model_path": req.mllm.get(
+                "model_path", current_mllm.get("model_path", "models/mllm/qwen2-vl-2b")
+            ),
+            "inference_backend": req.mllm.get(
+                "inference_backend", current_mllm.get("inference_backend", "mock")
+            ),
+            "shadow_mode": req.mllm.get(
+                "shadow_mode", current_mllm.get("shadow_mode", True)
+            ),
+            "key_frame_interval": int(
+                req.mllm.get(
+                    "key_frame_interval", current_mllm.get("key_frame_interval", 15)
+                )
+            ),
+            "max_new_tokens": int(
+                req.mllm.get("max_new_tokens", current_mllm.get("max_new_tokens", 256))
+            ),
+            "scene_description_enabled": req.mllm.get(
+                "scene_description_enabled",
+                current_mllm.get("scene_description_enabled", True),
+            ),
+            "alarm_enhance_enabled": req.mllm.get(
+                "alarm_enhance_enabled", current_mllm.get("alarm_enhance_enabled", True)
+            ),
+            "enhancement_cooldown_s": float(
+                req.mllm.get(
+                    "enhancement_cooldown_s",
+                    current_mllm.get("enhancement_cooldown_s", 10.0),
+                )
+            ),
         },
     }
 
@@ -624,6 +699,7 @@ def save_detection_config(req: SaveConfigRequest):
 
 # ── Video Upload ──────────────────────────────────────────────
 
+
 @router.post("/upload")
 @limiter.limit("5/minute")
 async def upload_video(request: Request, file: UploadFile = File(...)):
@@ -645,6 +721,7 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
         return {"status": "error", "message": error_msg}
 
     import secrets
+
     safe_filename = f"upload_{int(time.time())}_{secrets.token_hex(4)}{ext}"
     dest = UPLOAD_DIR / safe_filename
 
@@ -679,7 +756,9 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
                         try:
                             kind = filetype.guess(bytes(header_buf))
                             mime_type = kind.mime if kind else "unknown"
-                            is_valid, error_msg = validate_upload_mime(bytes(header_buf))
+                            is_valid, error_msg = validate_upload_mime(
+                                bytes(header_buf)
+                            )
                             if not is_valid:
                                 f.close()
                                 dest.unlink(missing_ok=True)
@@ -692,17 +771,16 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
 
             f.write(chunk)
 
-        if not mime_checked:
-            if header_buf:
-                mime_checked = True
-                if filetype:
-                    try:
-                        kind = filetype.guess(bytes(header_buf))
-                        mime_type = kind.mime if kind else "unknown"
-                    except Exception:
-                        pass
-                f.write(bytes(header_buf))
-                header_buf.clear()
+        if not mime_checked and header_buf:
+            mime_checked = True
+            if filetype:
+                try:
+                    kind = filetype.guess(bytes(header_buf))
+                    mime_type = kind.mime if kind else "unknown"
+                except Exception:
+                    pass
+            f.write(bytes(header_buf))
+            header_buf.clear()
 
     if total_size == 0:
         dest.unlink(missing_ok=True)
@@ -710,12 +788,19 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
 
     logger.info(
         "Uploaded video saved to %s (size=%d bytes, type=%s)",
-        dest, total_size, mime_type,
+        dest,
+        total_size,
+        mime_type,
     )
-    return {"status": "uploaded", "path": f"uploads/{safe_filename}", "filename": file.filename}
+    return {
+        "status": "uploaded",
+        "path": f"uploads/{safe_filename}",
+        "filename": file.filename,
+    }
 
 
 # ── Streaming ─────────────────────────────────────────────────
+
 
 @router.get("/stream.mjpg")
 def mjpeg_stream():
@@ -744,6 +829,7 @@ async def websocket_stream(websocket: WebSocket):
     logger.info("WebSocket client connected")
 
     from core.gpu_manager import GPUManager
+
     gpu_mgr = GPUManager()
 
     async def send_status_update():
@@ -751,16 +837,12 @@ async def websocket_stream(websocket: WebSocket):
         try:
             pipeline_stats = detection_manager.get_pipeline_stats()
             if pipeline_stats:
-                await websocket.send_json({
-                    "type": "status",
-                    "data": pipeline_stats
-                })
+                await websocket.send_json({"type": "status", "data": pipeline_stats})
 
                 if pipeline_stats.get("performance"):
-                    await websocket.send_json({
-                        "type": "performance",
-                        "data": pipeline_stats["performance"]
-                    })
+                    await websocket.send_json(
+                        {"type": "performance", "data": pipeline_stats["performance"]}
+                    )
             elif not detection_manager._detection_active:
                 # 管道未运行且检测已停止时，通知前端停止状态
                 status = detection_manager.get_status()
@@ -772,7 +854,7 @@ async def websocket_stream(websocket: WebSocket):
                         "frame_count": 0,
                         "elapsed_s": 0,
                         "events_count": 0,
-                    }
+                    },
                 }
                 if status.get("last_error"):
                     msg["data"]["last_error"] = status["last_error"]
@@ -780,17 +862,19 @@ async def websocket_stream(websocket: WebSocket):
                 await websocket.send_json(msg)
             else:
                 # 检测已标记为active但管线尚未就绪（模型加载中）
-                await websocket.send_json({
-                    "type": "status",
-                    "data": {
-                        "running": True,
-                        "state": "loading",
-                        "fps": 0,
-                        "frame_count": 0,
-                        "elapsed_s": 0,
-                        "events_count": 0,
+                await websocket.send_json(
+                    {
+                        "type": "status",
+                        "data": {
+                            "running": True,
+                            "state": "loading",
+                            "fps": 0,
+                            "frame_count": 0,
+                            "elapsed_s": 0,
+                            "events_count": 0,
+                        },
                     }
-                })
+                )
         except Exception as e:
             logger.debug("Error sending status update: %s", e)
 
@@ -798,10 +882,7 @@ async def websocket_stream(websocket: WebSocket):
         """Send GPU status update."""
         try:
             gpu_status = gpu_mgr.get_status_dict()
-            await websocket.send_json({
-                "type": "gpu",
-                "data": gpu_status
-            })
+            await websocket.send_json({"type": "gpu", "data": gpu_status})
         except Exception:
             pass
 
@@ -817,7 +898,9 @@ async def websocket_stream(websocket: WebSocket):
             except WebSocketDisconnect:
                 break
             except Exception as ws_err:
-                logger.error("WebSocket error (client may have disconnected): %s", ws_err)
+                logger.error(
+                    "WebSocket error (client may have disconnected): %s", ws_err
+                )
                 break
 
             update_count += 1

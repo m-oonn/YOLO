@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
@@ -28,7 +27,9 @@ def list_events(
     offset: int = Query(0, ge=0),
     start_time: float | None = Query(None, description="Start timestamp"),
     end_time: float | None = Query(None, description="End timestamp"),
-    search: str | None = Query(None, description="Text search in description and metadata"),
+    search: str | None = Query(
+        None, description="Text search in description and metadata"
+    ),
 ):
     """Query events with optional filters and pagination."""
     try:

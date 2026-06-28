@@ -11,12 +11,13 @@ Usage:
   python scripts/prepare_coco_yolo.py
   python scripts/prepare_coco_yolo.py --copy  # copy instead of symlink
 """
+
+import argparse
 import json
 import os
 import shutil
-import argparse
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 COCO_PERSON_ID = 1
 
@@ -30,11 +31,18 @@ def load_annotations(split: str):
     if not ann_file.exists():
         raise FileNotFoundError(f"Annotation file not found: {ann_file}")
     print(f"Loading {ann_file} ...")
-    with open(ann_file, "r", encoding="utf-8") as f:
+    with open(ann_file, encoding="utf-8") as f:
         return json.load(f)
 
 
-def convert_to_yolo(coco_ann, img_dir: Path, out_img_dir: Path, out_label_dir: Path, split: str, use_symlink: bool = True):
+def convert_to_yolo(
+    coco_ann,
+    img_dir: Path,
+    out_img_dir: Path,
+    out_label_dir: Path,
+    split: str,
+    use_symlink: bool = True,
+):
     images = {img["id"]: img for img in coco_ann["images"]}
     anns = defaultdict(list)
     for ann in coco_ann["annotations"]:
@@ -88,7 +96,9 @@ def convert_to_yolo(coco_ann, img_dir: Path, out_img_dir: Path, out_label_dir: P
         if processed % 10000 == 0:
             print(f"  {split}: processed {processed} images ...")
 
-    print(f"  {split}: {processed} images with person annotations, {total_persons} person boxes, {skipped} skipped")
+    print(
+        f"  {split}: {processed} images with person annotations, {total_persons} person boxes, {skipped} skipped"
+    )
     return processed
 
 
@@ -113,7 +123,9 @@ names:
 
 def main():
     parser = argparse.ArgumentParser(description="COCO 2017 to YOLO format converter")
-    parser.add_argument("--copy", action="store_true", help="Copy images instead of symlinks")
+    parser.add_argument(
+        "--copy", action="store_true", help="Copy images instead of symlinks"
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -138,7 +150,9 @@ def main():
         img_dir = COCO_ROOT / f"{split}2017"
         out_img_dir = OUTPUT_ROOT / "images" / split
         out_label_dir = OUTPUT_ROOT / "labels" / split
-        count = convert_to_yolo(coco_ann, img_dir, out_img_dir, out_label_dir, split, use_symlink)
+        count = convert_to_yolo(
+            coco_ann, img_dir, out_img_dir, out_label_dir, split, use_symlink
+        )
         total += count
 
     create_data_yaml()
