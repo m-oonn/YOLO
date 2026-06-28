@@ -30,9 +30,7 @@ jobs:
             course-design/requirements-dev.txt
       - run: pip install ruff
       - name: Run Ruff
-        run: |
-          cd course-design && ruff check . --output-format=github
-          cd course-design && ruff format . --check
+        run: cd course-design && ruff check . --output-format=github && ruff format . --check
 
   lint-frontend:
     name: Lint Frontend

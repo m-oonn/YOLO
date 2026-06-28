@@ -10,6 +10,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+def _has_onnxruntime() -> bool:
+    try:
+        import onnxruntime  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 # ── Archives API ────────────────────────────────────────────────
 
 
@@ -68,6 +78,10 @@ class TestTensorRTCapabilities:
 
         assert not TensorRTVLMBackend._has_torch_tensorrt()
 
+    @pytest.mark.skipif(
+        not _has_onnxruntime(),
+        reason="onnxruntime not installed",
+    )
     def test_has_onnxruntime_trt_default_false(self):
         from core.mllm.inference_engine import TensorRTVLMBackend
 
